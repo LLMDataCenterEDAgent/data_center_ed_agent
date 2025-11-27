@@ -6,7 +6,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.state import EDAgentState
 from core.graph import build_graph
 
-
 if __name__ == "__main__":
     scenario = """
     내일 24시간 동안 피크 부하는 10MW이고,
@@ -17,14 +16,22 @@ if __name__ == "__main__":
     Grid 가격은 피크에 더 비싸다.
     """
 
+    # 초기 state
     init = EDAgentState(scenario=scenario)
+
+    # 그래프 컴파일
     graph = build_graph()
     app = graph.compile()
-    final = app.invoke(init)
 
+    # 실행
+    final = app.invoke(init)
+    
     print("\n===== RESULT =====")
-    print(final.solution_summary)
+    print(final["solution_summary"])
+
+    print("\n===== EXPLANATION =====")
+    print(final.get("solution_explanation", "No explanation generated"))
 
     print("\n===== LOGS =====")
-    for log in final.logs:
-        print("-", log)
+    for log in final["logs"]:
+        print(log)

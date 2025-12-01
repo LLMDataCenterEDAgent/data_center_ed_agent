@@ -1,21 +1,11 @@
 # agents/solver_agent.py
-from pyomo.environ import SolverFactory
 
-def solver_node(state):
+from core.solver_interface import solve_with_pyomo
+from core.analytic_solver import analytic_solve_two_gen
 
-    model = state["model"]
-    solver = SolverFactory("gurobi")
-
-    solver.solve(model, tee=False)
-
-    solution = {
-        "P_grid": [model.P_grid[t]() for t in model.T],
-        "P_pv":   [model.P_pv[t]() for t in model.T],
-        "P_mgt":  [model.P_mgt[t]() for t in model.T],
-        "P_smr":  [model.P_smr[t]() for t in model.T],
-        "SOC":    [model.SOC[t]() for t in model.T],
-        "OBJ":    model.OBJ()
-    }
-
-    state["solution"] = solution
-    return state
+def solve_ed(params, method="analytic"):
+    if method == "analytic":
+        return analytic_solve_two_gen(params)
+    else:
+        model = build_two_gen_model(params)
+        return solve_with_pyomo(model)

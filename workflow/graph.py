@@ -1,54 +1,37 @@
 # workflow/graph.py
 
-from langgraph.graph import StateGraph
-from state.base_state import EDState
+from langgraph.graph import StateGraph, END
+from state.base_state import AgentState
 
-from agents.parsing_agent import parse_problem
-from agents.formulation_agent import formulate
-from agents.solver_agent import solve_ed
-from agents.explanation_agent import explain_solution
-
-
-def parsing_node(state):
-    print("\n===== PROBLEM TEXT RECEIVED BY LLM =====")
-    print(state["problem_text"])
-    print("========================================\n")
-
-    params = parse_problem(state["problem_text"])
-    print("\n===== PARSING RESULT =====")
-    print(params)
-    print("==========================\n")
-
-    state["params"] = params
-    return state
-
-
-def formulation_node(state):
-    state["formulated"] = formulate(state["params"])
-    return state
-
-def solver_node(state):
-    sol = solve_ed(state["formulated"], method="analytic")
-    state["solution"] = sol
-    return state
-
-def explanation_node(state):
-    explain = explain_solution(state["formulated"], state["solution"])
-    state["explanation"] = explain
-    return state
-
+# 에이전트 클래스 임포트
+from agents.parsing_agent import ParsingAgent
+from agents.formulation_agent import FormulationAgent
+from agents.solver_agent import SolverAgent
+from agents.explanation_agent import ExplanationAgent
 
 def build_graph():
-    graph = StateGraph(EDState)
+    # 1. 그래프 초기화
+    workflow = StateGraph(AgentState)
 
-    graph.add_node("parse", parsing_node)
-    graph.add_node("formulate", formulation_node)
-    graph.add_node("solve", solver_node)
-    graph.add_node("explain", explanation_node)
+    # 2. 에이전트 인스턴스 생성
+    parser = ParsingAgent()
+    formulator = FormulationAgent()
+    solver = SolverAgent()
+    explainer = ExplanationAgent()
 
-    graph.set_entry_point("parse")
-    graph.add_edge("parse", "formulate")
-    graph.add_edge("formulate", "solve")
-    graph.add_edge("solve", "explain")
+    # 3. 노드 정의 (클래스의 .run 메서드 연결)
+    workflow.add_node("parse", parser.run)
+    workflow.add_node("formulate", formulator.run)
+    workflow.add_node("solve", solver.run)
+    workflow.add_node("explain", explainer.run)
 
-    return graph.compile()
+    # 4. 엣지 연결 (순차 실행)
+    # parse -> formulate -> solve -> explain -> END
+    workflow.set_entry_point("parse")
+    workflow.add_edge("parse", "formulate")
+    workflow.add_edge("formulate", "solve")
+    workflow.add_edge("solve", "explain")
+    workflow.add_edge("explain", END)
+
+    # 5. 컴파일
+    return workflow.compile()

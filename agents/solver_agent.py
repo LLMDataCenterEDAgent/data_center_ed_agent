@@ -1,49 +1,67 @@
 # agents/solver_agent.py
 
-import pyomo.environ as pyo
 from state.base_state import AgentState
+from core.dynamic_solver import solve_dynamic_ed
 
 class SolverAgent:
     def run(self, state: AgentState) -> AgentState:
         print("\n--- Solver Agent Started ---")
         
-        # [수정] state.pyomo_model -> state.get('pyomo_model')
-        model = state.get('pyomo_model')
-        
-        if model is None:
-            print("Error: No model found in state.")
+        params = state.get("params")
+        if not params:
+            print("Error: No params found.")
             return state
 
-        # Gurobi 호출
-        solver = pyo.SolverFactory('gurobi')
-        solver.options['TimeLimit'] = 60
-        
         try:
-            results = solver.solve(model, tee=True)
+            print(">>> Solving Dynamic ED (Pyomo)...")
+            sol = solve_dynamic_ed(params)
             
-            # agents/solver_agent.py (일부)
+            # 원본 객체 저장
+            state["solution"] = sol
+            
+            # 결과 변환 (Dict)
+            output_dict = {}
+            output_dict['Total_Cost'] = sol.cost
+            
+            # 스케줄 데이터 변환
+            for t in range(params.time_steps):
+                row = {}
+                
+                # 1. Grid
+                if 'P_grid' in sol.schedule:
+                    row['P_grid'] = sol.schedule['P_grid'][t]
+                
+                # 2. Generators (G1, G2 등)
+                for key in sol.schedule:
+                    if key.startswith('P_') and key != 'P_grid':
+                        row[key] = sol.schedule[key][t]
+                
+                # 3. ESS
+                if sol.ess_schedule:
+                    for ess_name in sol.ess_schedule:
+                        row[f'P_dis_{ess_name}'] = sol.ess_schedule[ess_name]['discharge'][t]
+                        row[f'P_chg_{ess_name}'] = sol.ess_schedule[ess_name]['charge'][t]
+                        row[f'SOC_{ess_name}'] = sol.ess_schedule[ess_name]['soc'][t]
+                
+                # 4. [핵심 추가] PV 데이터 추가!
+                # Solver는 Net Load만 보지만, 시각화를 위해 원본 PV 데이터를 결과에 포함시킴
+                if params.pv_profile:
+                    row['P_PV'] = params.pv_profile[t]
+                else:
+                    row['P_PV'] = 0.0
+                
+                output_dict[t] = row
+            
+            # 최종 저장
+            state["solution_output"] = output_dict
+            
+            print(f"Optimization completed. Cost: {sol.cost:,.0f}")
+            print("✅ PV Data added to results.")
 
-            if (results.solver.status == pyo.SolverStatus.ok) and \
-               (results.solver.termination_condition == pyo.TerminationCondition.optimal):
-                print("Optimal Solution Found!")
-                
-                solution_data = {}
-                for t in model.T:
-                    sol_t = {}
-                    if hasattr(model, 'P_grid'):
-                        sol_t['P_grid'] = pyo.value(model.P_grid[t])
-                    if hasattr(model, 'P_mgt'):
-                        sol_t['P_mgt'] = pyo.value(model.P_mgt[t])
-                    solution_data[t] = sol_t
-                
-                # 핵심: 'Total_Cost'와 'solution_output'으로 저장
-                solution_data['Total_Cost'] = pyo.value(model.Objective)
-                state['solution_output'] = solution_data  # 이 이름을 확인하세요!
-                state['solution'] = solution_data # 호환성 위해 둘 다 저장
-            else:
-                print("Solver failed.")
-                
         except Exception as e:
             print(f"Solver Error: {e}")
+            import traceback
+            traceback.print_exc()
+            state["solution"] = None
 
         return state

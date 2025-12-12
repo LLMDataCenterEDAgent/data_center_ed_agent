@@ -2,22 +2,22 @@
 
 from typing import TypedDict, Optional, Any
 
-# 클래스 이름을 'AgentState'로 통일
+# [중요] 클래스 이름을 'AgentState'로 통일합니다.
 class AgentState(TypedDict, total=False):
-    # 사용자 입력 텍스트
+    # 사용자 입력
     problem_text: str
 
-    # Parsing 결과 (Dict 구조의 시계열 데이터)
-    params: Optional[dict]
+    # Parsing 결과
+    parsed_data: Optional[dict]
 
-    # Formulation 결과 (Pyomo ConcreteModel 객체)
-    pyomo_model: Optional[Any]
+    # Formulation 결과 (EDParams 객체)
+    params: Optional[Any]
 
-    # Solver 결과 (시계열 수치 데이터 Dict) - 핵심 키 이름 통일
-    solution_output: Optional[dict]
-
-    # 기존 호환성을 위해 solution 키도 남김
+    # Solver 결과 (원본 객체)
     solution: Optional[Any]
 
-    # 최종 설명 (문자열)
+    # [핵심] Solver 결과 (Dict 변환본) - ★이 줄이 반드시 있어야 합니다!★
+    solution_output: Optional[dict]
+
+    # Explanation Agent 결과
     explanation: Optional[str]

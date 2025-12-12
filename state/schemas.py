@@ -1,32 +1,58 @@
 # state/schemas.py
 
+from pydantic import BaseModel, Field
+from typing import Dict, List, Optional, Any
 
-from dataclasses import dataclass
-from typing import Dict, Optional, Any
-
-@dataclass
-class GeneratorSpec:
+# 1. 발전기 스펙
+class GeneratorSpec(BaseModel):
     name: str
-    a: float
-    b: float
-    c: float
-    p_min: float
-    p_max: float
+    a: float = 0.0
+    b: float = 0.0
+    c: float = 0.0
+    p_min: float = 0.0
+    p_max: float = 0.0
+    ramp_rate: Optional[float] = None
+    cost_coeff: Optional[float] = None
 
-@dataclass
-class EDParams:
-    generators: Dict[str, GeneratorSpec]
-    demand: float
+# 2. ESS 스펙
+class StorageSpec(BaseModel):
+    name: str
+    capacity_mwh: float
+    max_power_mw: float
+    efficiency: float = 0.95
+    initial_soc: float = 0.5
+    min_soc: float = 0.1
+    max_soc: float = 0.9
+    aging_cost: float = 0.0
 
-@dataclass
-class EDSolution:
-    Pg: Dict[str, float]                  # 발전기 출력 (예: {"G1": 250, "G2": 250})
-    cost: float                           # 총 비용 F1+F2
-    note: Optional[str] = None            # 솔버 상태 메모
+# 3. 재생에너지(PV) 스펙
+class RenewableSpec(BaseModel):
+    name: str
+    peak_mw: float
+    curtailment_cost: float = 0.0
 
-    # 🔽 새로 추가되는 정보들
-    lambda_val: Optional[float] = None    # 시스템 한계비용 λ (가능하면)
-    fuel_costs: Optional[Dict[str, float]] = None  # 각 발전기 연료비 { "G1": F1, "G2": F2 }
-    balance_violation: Optional[float] = None      # (P1+P2) - D (0이면 제약 정확히 만족)
-    slacks: Optional[Dict[str, Dict[str, float]]] = None  
-    # 예: { "G1": {"lower": P1-P1_min, "upper": P1_max-P1}, ... }
+# 4. 전체 파라미터 구조 (EDParams)
+class EDParams(BaseModel):
+    generators: Dict[str, GeneratorSpec] = Field(default_factory=dict)
+    ess: Optional[Dict[str, StorageSpec]] = None
+    pv: Optional[Dict[str, RenewableSpec]] = None
+    
+    # 시계열 관련 설정
+    is_time_series: bool = False
+    time_steps: int = 1
+    demand_profile: Optional[List[float]] = None
+    pv_profile: Optional[List[float]] = None
+    grid_price_profile: Optional[List[float]] = None
+    
+    # [핵심 수정] 이 줄이 없어서 에러가 난 것입니다! 꼭 추가해주세요.
+    timestamps: Optional[List[str]] = None
+    
+    pv_reserve_ratio: float = 0.0
+    demand: float = 0.0
+
+# 5. 최적화 결과 구조 (EDSolution)
+class EDSolution(BaseModel):
+    cost: float = 0.0
+    note: str = ""
+    schedule: Optional[Dict[str, Any]] = None 
+    ess_schedule: Optional[Dict[str, Any]] = None

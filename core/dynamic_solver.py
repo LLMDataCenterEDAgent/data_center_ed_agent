@@ -20,32 +20,26 @@ def solve_dynamic_ed(params: EDParams) -> EDSolution:
     m.P_grid_import = pyo.Var(m.T, domain=pyo.NonNegativeReals) 
     m.P_grid_export = pyo.Var(m.T, domain=pyo.NonNegativeReals)
 
-    # (1) Power Balance
+    # Constraints
     def balance_rule(model, t):
         supply = model.P_grid_import[t] + sum(model.P_gen[g, t] for g in gen_names)
         if ess_names: supply += sum(model.P_dis[e, t] for e in ess_names)
-            
         demand = params.demand_profile[t] + model.P_grid_export[t]
         if ess_names: demand += sum(model.P_chg[e, t] for e in ess_names)
-            
         return supply == demand
     m.Balance = pyo.Constraint(m.T, rule=balance_rule)
 
-    # (2) Generator Limits & [New] Ramp Rate
     def gen_bounds_rule(model, g, t):
         spec = params.generators[g]
         return (spec.p_min, model.P_gen[g, t], spec.p_max)
     m.GenBounds = pyo.Constraint(gen_names, m.T, rule=gen_bounds_rule)
     
-    # [램프 제약 추가] 이것 때문에 0.75가 동작합니다!
     def ramp_rule(model, g, t):
         if t == 0: return pyo.Constraint.Skip
         spec = params.generators[g]
-        # |P(t) - P(t-1)| <= ramp_rate
         return (-spec.ramp_rate, model.P_gen[g, t] - model.P_gen[g, t-1], spec.ramp_rate)
     m.Ramp = pyo.Constraint(gen_names, m.T, rule=ramp_rule)
     
-    # (3) ESS Constraints
     if ess_names:
         dt = 0.25
         def soc_rule(model, e, t):
@@ -63,28 +57,30 @@ def solve_dynamic_ed(params: EDParams) -> EDSolution:
             return model.P_chg[e, t] + model.P_dis[e, t] <= params.ess[e].max_power_mw
         m.ESS_Power = pyo.Constraint(ess_names, m.T, rule=ess_power_limit)
 
-    # (4) Objective
+    # [핵심] Objective Function: 변동비 + 고정비(base_rate)
     def obj_rule(model):
-        total_cost = 0
+        variable_cost = 0
         for t in model.T:
-            # Gen Cost
+            # 1. 발전 비용
             for g in gen_names:
                 spec = params.generators[g]
                 p = model.P_gen[g, t]
                 if spec.a != 0 or spec.b != 0:
-                    total_cost += spec.a * p**2 + spec.b * p + spec.c
+                    variable_cost += spec.a * p**2 + spec.b * p + spec.c
                 elif spec.cost_coeff:
-                    total_cost += p * spec.cost_coeff
+                    variable_cost += p * spec.cost_coeff
             
-            # [수정] Grid Cost: 하드코딩 1000 제거 -> 실제 TOU 요금 사용
-            grid_price = params.grid_price_profile[t] if params.grid_price_profile else 1000.0
-            total_cost += model.P_grid_import[t] * grid_price
+            # 2. 전력망 구입 비용
+            grid_price = params.grid_price_profile[t] if params.grid_price_profile else 200000.0
+            variable_cost += model.P_grid_import[t] * grid_price
             
-            # ESS Aging
+            # 3. ESS 노화 비용
             if ess_names:
                 for e in ess_names:
-                    total_cost += model.P_dis[e, t] * params.ess[e].aging_cost
-                    
+                    variable_cost += model.P_dis[e, t] * params.ess[e].aging_cost
+        
+        # [여기서 더함!] 기본요금 합산
+        total_cost = variable_cost + (params.base_rate if hasattr(params, 'base_rate') else 0.0)
         return total_cost
     
     m.Obj = pyo.Objective(rule=obj_rule, sense=pyo.minimize)

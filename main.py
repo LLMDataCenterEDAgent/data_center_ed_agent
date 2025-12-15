@@ -2,16 +2,13 @@
 
 import os
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm # 컬러맵 사용
 from fpdf import FPDF, XPos, YPos
 from workflow.graph import build_graph
 
 # =========================================================
-# 1. 결과 시각화 (동적 발전원 처리 + 자동 정렬 + 색상 지정)
+# 1. 결과 시각화 (완전 동적: 발전기 N개 + ESS N개)
 # =========================================================
-# main.py의 plot_results 함수를 이걸로 교체하세요
-
-# main.py의 plot_results 함수를 이걸로 교체하세요
-
 def plot_results(solution_data, params):
     if not solution_data: return
 
@@ -24,83 +21,79 @@ def plot_results(solution_data, params):
     else:
         time_labels = [f"{int(t/4):02d}:{int(t%4)*15:02d}" for t in times]
 
-    # 데이터 추출
+    # ---------------------------------------------------------
+    # 1. 데이터 수집 (발전기 & ESS 자동 탐지)
+    # ---------------------------------------------------------
     p_grid = []
     p_pv = []
-    p_ess_dis = []
     
-    # 발전기 데이터 (동적)
-    gen_data = {g: [] for g in params.generators}
+    # 동적 리스트
+    gen_names = list(params.generators.keys())
+    ess_names = list(params.ess.keys()) if params.ess else []
+    
+    gen_data = {g: [] for g in gen_names}
+    ess_data = {e: [] for e in ess_names} # ESS 방전량
 
     for t in times:
         val = solution_data.get(t, {})
         p_grid.append(val.get('P_grid', 0))
         p_pv.append(val.get('P_PV', 0))
-        p_ess_dis.append(val.get('P_dis_ESS1', val.get('P_discharge', 0)))
         
-        for g in params.generators:
+        # 발전기 데이터 수집
+        for g in gen_names:
             gen_data[g].append(val.get(f'P_{g}', val.get(g, 0)))
+            
+        # ESS 방전 데이터 수집 (여러 대일 경우 대비)
+        for e in ess_names:
+            # SolverAgent는 P_dis_ESS1 형태로 저장함
+            ess_data[e].append(val.get(f'P_dis_{e}', 0))
 
     # ---------------------------------------------------------
-    # [핵심] 색상 및 순서 전략
+    # 2. 스택 순서 및 색상 결정
     # ---------------------------------------------------------
-    color_map = {
-        "SMR1": "#9467bd",    # 보라색 (가장 무거운 기저부하)
-        "PV":   "#2ca02c",    # 초록색 (재생에너지)
-        "GT1":  "#d62728",    # 빨간색 (변동성 큼)
-        "GT2":  "#ff7f0e",    # 주황색 (GT1과 확연히 구분되게 변경!)
-        "ESS Dis": "#8c564b", # 갈색 (보조)
-        "Grid": "#1f77b4"     # 파란색 (최후의 수단)
-    }
-
     sources = []
-
-    # 1. SMR (무조건 맨 아래 고정)
-    if "SMR1" in gen_data:
-        sources.append({
-            "label": "SMR1 (Base)", 
-            "data": gen_data["SMR1"], 
-            "total": sum(gen_data["SMR1"]), 
-            "color": color_map["SMR1"]
-        })
-        del gen_data["SMR1"]
-
-    # 2. PV (그 다음)
-    sources.append({"label": "PV", "data": p_pv, "total": sum(p_pv), "color": color_map["PV"]})
-
-    # 3. GT1, GT2 (그 위에 쌓아서 변동성 보여주기)
-    # GT들이 서로 섞이지 않고 SMR 위에 층층이 쌓이도록 처리
-    if "GT1" in gen_data:
-        sources.append({"label": "GT1", "data": gen_data["GT1"], "total": sum(gen_data["GT1"]), "color": color_map["GT1"]})
-        del gen_data["GT1"]
-        
-    if "GT2" in gen_data:
-        sources.append({"label": "GT2", "data": gen_data["GT2"], "total": sum(gen_data["GT2"]), "color": color_map["GT2"]})
-        del gen_data["GT2"]
-
-    # 4. 나머지 (ESS, Grid 등 - 자동 정렬)
-    temp_sources = []
-    temp_sources.append({"label": "Grid", "data": p_grid, "total": sum(p_grid), "color": color_map["Grid"]})
-    temp_sources.append({"label": "ESS Dis", "data": p_ess_dis, "total": sum(p_ess_dis), "color": color_map["ESS Dis"]})
     
-    # 혹시 남은 발전기가 있다면 추가
-    for g_name, data in gen_data.items():
-        temp_sources.append({"label": g_name, "data": data, "total": sum(data), "color": "#7f7f7f"})
+    # (1) PV (무조건 바닥)
+    sources.append({"label": "PV", "data": p_pv, "total": sum(p_pv), "priority": 0, "color": "#2ca02c"}) # 초록
+
+    # (2) SMR / Nuclear (기저부하)
+    for g in gen_names:
+        if "SMR" in g.upper() or "NUC" in g.upper():
+            sources.append({"label": g, "data": gen_data[g], "total": sum(gen_data[g]), "priority": 1, "color": "#9467bd"}) # 보라
+
+    # (3) 일반 발전기 (GT 등) - 발전량 순 자동 색상
+    gt_list = [g for g in gen_names if "SMR" not in g.upper()]
+    # 색상 팔레트 (붉은/주황 계열)
+    reds = ["#d62728", "#ff7f0e", "#e377c2", "#bcbd22", "#8c564b"]
     
-    # 나머지는 발전량 순서대로
-    temp_sources.sort(key=lambda x: x['total'], reverse=True)
-    sources.extend(temp_sources)
+    for i, g in enumerate(gt_list):
+        color = reds[i % len(reds)]
+        sources.append({"label": g, "data": gen_data[g], "total": sum(gen_data[g]), "priority": 2, "color": color})
+
+    # (4) ESS 방전 (여러 대일 경우)
+    # ESS 색상 팔레트 (갈색 계열)
+    browns = ["#8B4513", "#A0522D", "#CD853F"]
+    for i, e in enumerate(ess_names):
+        color = browns[i % len(browns)]
+        sources.append({"label": f"{e} Dis", "data": ess_data[e], "total": sum(ess_data[e]), "priority": 3, "color": color})
+
+    # (5) Grid (최상단)
+    sources.append({"label": "Grid", "data": p_grid, "total": sum(p_grid), "priority": 4, "color": "#1f77b4"}) # 파랑
+
+    # 정렬: Priority -> Total Volume
+    sources.sort(key=lambda x: (x['priority'], -x['total']))
 
     # ---------------------------------------------------------
     
-    y_arrays = [s['data'] for s in sources]
-    labels = [s['label'] for s in sources]
-    colors = [s['color'] for s in sources]
+    y_arrays = [s['data'] for s in sources if s['total'] > 0.1]
+    labels = [s['label'] for s in sources if s['total'] > 0.1]
+    colors = [s['color'] for s in sources if s['total'] > 0.1]
 
     plt.figure(figsize=(12, 6))
-    plt.stackplot(times, *y_arrays, labels=labels, colors=colors, alpha=0.85)
+    plt.stackplot(times, *y_arrays, labels=labels, colors=colors, alpha=0.9, edgecolor='white', linewidth=0.5)
     
-    plt.title("Optimization Result: Energy Mix (SMR Base + GT Variable)", fontsize=15, fontweight='bold')
+    title_str = f"Optimization: {len(gen_names)} Gens + {len(ess_names)} ESS"
+    plt.title(title_str, fontsize=15, fontweight='bold')
     plt.ylabel("Power (MW)", fontsize=12)
     plt.xlabel("Time", fontsize=12)
     
@@ -108,14 +101,13 @@ def plot_results(solution_data, params):
     plt.xticks(ticks=ticks, labels=[time_labels[i] for i in ticks])
     plt.xlim(0, T-1)
     
-    # 범례 역순
     handles, labels = plt.gca().get_legend_handles_labels()
-    plt.legend(handles[::-1], labels[::-1], loc='upper left', title="Stack Order")
+    plt.legend(handles[::-1], labels[::-1], loc='upper left', title="Layer Order")
     
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.savefig("optimization_result.png")
-    print("[Graph] Saved to optimization_result.png (GTs Highlighted)")
-    
+    print(f"[Graph] Saved. (Includes {len(ess_names)} ESS units)")
+
 # PDF 생성 함수
 def create_pdf_report(explanation_text, image_path="optimization_result.png", filename="Final_Report.pdf"):
     pdf = FPDF()
@@ -134,14 +126,31 @@ def create_pdf_report(explanation_text, image_path="optimization_result.png", fi
     try: pdf.multi_cell(0, 6, explanation_text if explanation_text else "No content.", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     except: pdf.multi_cell(0, 6, "Text error.", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.output(filename)
-    print(f"[PDF] Saved to {filename}")
+    print(f"[PDF] Saved.")
 
 # =========================================================
-# 3. 메인 실행 (발전기 자동 탐지 기능 추가)
+# 3. 메인 실행 (사용자 자연어 입력)
 # =========================================================
 if __name__ == "__main__":
     graph = build_graph()
-    initial_state = {"solution_output": None, "explanation": None}
+    
+    # -----------------------------------------------------
+    # [사용자 입력] 여기서 마음대로 시나리오를 바꾸세요!
+    # -----------------------------------------------------
+    user_request = """
+        가스터빈(GT)은 2대가 있고, 최소 85, 최대 120MW야.
+        GT의 비용은 2차 함수 형태인데, 
+        a는 0.005, b는 10.0, c는 500.0을 사용해줘. (P^2 단위 비용)
+        SMR 1대는 기존처럼 비용은 0.002로 아주 싸.
+        ESS는 1대(ESS1) 있는데 용량 160MWh, 출력 40MW야.
+        """
+    # -----------------------------------------------------
+    
+    initial_state = {
+        "problem_text": user_request, 
+        "solution_output": None, 
+        "explanation": None
+    }
     
     print("\n>> Running Workflow...")
     try:
@@ -152,56 +161,62 @@ if __name__ == "__main__":
         if sol and final_params:
             print(f">> Success! Total Cost: {sol.get('Total_Cost', 0):,.0f}")
             
-            # [핵심] 발전기 이름 자동 추출 (GT1, GT2, SMR1 ...)
+            # 동적 헤더 생성 (Gen + ESS)
             gen_names = list(final_params.generators.keys())
+            ess_names = list(final_params.ess.keys()) if final_params.ess else []
             
-            # 헤더 생성
-            gen_header_str = " | ".join([f"{g:^8}" for g in gen_names])
-            total_len = 80 + len(gen_names) * 11
+            # [수정됨] 이전에 에러나던 중복 코드를 제거하고 깔끔하게 정리했습니다.
+            headers = ["Time", "Grid", "PV"] + gen_names + [f"{e}_Dis" for e in ess_names] + ["Total", "Net_Load", "Diff"]
+            header_fmt = " | ".join([f"{h:^8}" for h in headers])
             
-            print("-" * total_len)
-            print(f"{'Time':^8} | {'Grid':^8} | {'PV':^8} | {gen_header_str} | {'ESS_Dis':^8} | {'Total':^8} | {'Net_Load':^8} | {'Diff':^6}")
-            print("-" * total_len)
+            line_len = len(header_fmt) + 5
+            print("-" * line_len)
+            print(header_fmt)
+            print("-" * line_len)
             
             for t in range(final_params.time_steps):
                 row = sol[t]
                 
-                # 1. 값 추출
+                # 값 가져오기
+                vals = []
+                # Time
+                t_label = final_params.timestamps[t].split(" ")[-1] if final_params.timestamps else f"{t}"
+                vals.append(t_label)
+                
+                # Grid, PV
                 p_grid = row.get('P_grid', 0)
                 p_pv = row.get('P_PV', 0)
-                p_ess_dis = row.get('P_dis_ESS1', row.get('P_discharge', 0))
+                vals.append(p_grid)
+                vals.append(p_pv)
                 
-                # 2. 발전기 합계 및 문자열 생성
-                gen_vals = []
+                # Gens
                 p_gen_sum = 0
                 for g in gen_names:
                     val = row.get(f'P_{g}', row.get(g, 0))
-                    gen_vals.append(val)
+                    vals.append(val)
                     p_gen_sum += val
+                    
+                # ESSs
+                p_ess_sum = 0
+                for e in ess_names:
+                    val = row.get(f'P_dis_{e}', 0)
+                    vals.append(val)
+                    p_ess_sum += val
                 
-                gen_val_str = " | ".join([f"{v:^8.1f}" for v in gen_vals])
-                
-                # 3. 총 공급 및 오차
-                # Total = Grid + PV + Gen_Sum + ESS_Dis (Net_Load 비교를 위해 PV 포함 여부 주의)
-                # 여기선 Display용 Total Supply를 보여줌
-                # Net Load = Demand - PV 이므로,
-                # Managed Supply (Grid+Gen+ESS)가 Net Load와 같아야 함.
-                
-                managed_supply = p_grid + p_gen_sum + p_ess_dis
-                target_demand = final_params.demand_profile[t] # Net Load
-                
+                # Totals
+                managed_supply = p_grid + p_gen_sum + p_ess_sum
+                target_demand = final_params.demand_profile[t]
                 diff = managed_supply - target_demand
                 
-                # 4. 시간 라벨
-                if final_params.timestamps:
-                    t_label = final_params.timestamps[t].split(" ")[-1]
-                else:
-                    t_label = f"{t}"
+                vals.append(managed_supply)
+                vals.append(target_demand)
+                vals.append(diff)
                 
-                # 출력
-                print(f"{t_label:^8} | {p_grid:^8.1f} | {p_pv:^8.1f} | {gen_val_str} | {p_ess_dis:^8.1f} | {managed_supply:^8.1f} | {target_demand:^8.1f} | {diff:^6.1f}")
+                # 출력 포맷 (문자열은 그대로, 숫자는 소수점 1자리)
+                row_str = " | ".join([f"{v:^8}" if isinstance(v, str) else f"{v:^8.1f}" for v in vals])
+                print(row_str)
             
-            print("-" * total_len)
+            print("-" * line_len)
             
             plot_results(sol, final_params)
             create_pdf_report(result.get("explanation"))

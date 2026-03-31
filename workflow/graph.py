@@ -8,7 +8,7 @@ from state.base_state import AgentState
 from agents.parsing_agent import ParsingAgent
 from agents.formulation_agent import FormulationAgent
 from agents.solver_agent import SolverAgent
-from agents.explanation_agent import ExplanationAgent
+from agents.explanation_agent_v2 import ExplanationAgent
 
 def build_graph():
     # 1. 그래프 초기화

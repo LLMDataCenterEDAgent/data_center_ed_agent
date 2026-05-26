@@ -29,6 +29,7 @@ _LIGHT = {
     "section_line": "#eff6ff",
     "tou_td_bg":    "#f8faff",
     "tou_border":   "rgba(0,0,0,0.08)",
+    "input_border": "#cbd5e1",
 }
 
 _DARK = {
@@ -41,6 +42,7 @@ _DARK = {
     "section_line": "rgba(96,165,250,0.2)",
     "tou_td_bg":    "rgba(255,255,255,0.03)",
     "tou_border":   "rgba(255,255,255,0.07)",
+    "input_border": "#334155",
 }
 
 
@@ -151,6 +153,22 @@ def inject_css(dark: bool):
         .badge-off {{ background:rgba(59,130,246,.15);  color:#60a5fa; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
         .badge-mid {{ background:rgba(245,158,11,.15);  color:#fbbf24; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
         .badge-on  {{ background:rgba(236,72,153,.15);  color:#f472b6; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
+
+        /* ── Input borders ── */
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stTextArea"] textarea {{
+            border: 1.5px solid {c['input_border']} !important;
+            border-radius: 8px !important;
+            background: {c['card']} !important;
+            color: {c['text']} !important;
+        }}
+        div[data-testid="stNumberInput"] > div,
+        div[data-testid="stTextInput"] > div {{
+            border: 1.5px solid {c['input_border']} !important;
+            border-radius: 8px !important;
+            background: {c['card']} !important;
+        }}
 
         /* ── Streamlit overrides ── */
         div[data-testid="stTabs"] button[role="tab"] {{ font-weight:600; font-size:.875rem; }}

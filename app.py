@@ -15,18 +15,52 @@ from workflow.graph import build_graph
 st.set_page_config(page_title="Data Center ED Agent", page_icon="⚡", layout="wide")
 
 
-def inject_css():
+# ─────────────────────────────────────────
+#  Theme
+# ─────────────────────────────────────────
+
+_LIGHT = {
+    "bg":           "#f0f2f6",
+    "card":         "#ffffff",
+    "text":         "#1f2937",
+    "subtext":      "#6b7280",
+    "shadow":       "rgba(0,0,0,0.08)",
+    "section_h2":   "#1e3a8a",
+    "section_line": "#eff6ff",
+    "tou_td_bg":    "#f8faff",
+    "tou_border":   "rgba(0,0,0,0.08)",
+}
+
+_DARK = {
+    "bg":           "#0e1117",
+    "card":         "#1e2130",
+    "text":         "#f1f5f9",
+    "subtext":      "#94a3b8",
+    "shadow":       "rgba(0,0,0,0.35)",
+    "section_h2":   "#60a5fa",
+    "section_line": "rgba(96,165,250,0.2)",
+    "tou_td_bg":    "rgba(255,255,255,0.03)",
+    "tou_border":   "rgba(255,255,255,0.07)",
+}
+
+
+def inject_css(dark: bool):
+    c = _DARK if dark else _LIGHT
     st.markdown(
-        """
+        f"""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-        html, body, [class*="css"] {
-            font-family: 'Inter', sans-serif;
-        }
+        html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; }}
 
-        /* ── Dashboard header (gradient — same in both modes) ── */
-        .db-header {
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stHeader"] {{
+            background: {c['bg']} !important;
+        }}
+
+        /* ── Dashboard header ── */
+        .db-header {{
             background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #2563eb 100%);
             border-radius: 16px;
             padding: 2rem 2.5rem;
@@ -34,113 +68,94 @@ def inject_css():
             display: flex;
             align-items: center;
             justify-content: space-between;
-        }
-        .db-header h1 { color: #ffffff; font-size: 1.75rem; font-weight: 700; margin: 0; line-height: 1.2; }
-        .db-header p  { color: #93c5fd; font-size: 0.875rem; margin: 0.35rem 0 0; }
-        .db-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 20px;
-            padding: 0.3rem 0.9rem;
-            color: #bfdbfe; font-size: 0.78rem; font-weight: 500;
-            margin: 0.25rem 0.2rem 0;
-        }
-        .db-badge.ok  { background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.4); color: #6ee7b7; }
-        .db-badge.warn{ background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: #fcd34d; }
+        }}
+        .db-header h1 {{ color:#fff; font-size:1.75rem; font-weight:700; margin:0; line-height:1.2; }}
+        .db-header p  {{ color:#93c5fd; font-size:.875rem; margin:.35rem 0 0; }}
+        .db-badge {{
+            display:inline-block;
+            background:rgba(255,255,255,0.12);
+            border:1px solid rgba(255,255,255,0.2);
+            border-radius:20px; padding:.3rem .9rem;
+            color:#bfdbfe; font-size:.78rem; font-weight:500;
+            margin:.25rem .2rem 0;
+        }}
+        .db-badge.ok   {{ background:rgba(16,185,129,.2); border-color:rgba(16,185,129,.4); color:#6ee7b7; }}
+        .db-badge.warn {{ background:rgba(245,158,11,.2); border-color:rgba(245,158,11,.4); color:#fcd34d; }}
 
-        /* ── KPI cards — var() adapts to light/dark automatically ── */
-        .kpi-card {
-            flex: 1; min-width: 140px;
-            background: var(--secondary-background-color);
-            border-radius: 14px;
-            padding: 1.15rem 1.35rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-            border-top: 4px solid var(--accent);
-            position: relative;
-            overflow: hidden;
-        }
-        .kpi-card::after {
-            content: '';
-            position: absolute; right: -14px; top: -14px;
-            width: 72px; height: 72px;
-            border-radius: 50%;
-            background: var(--accent);
-            opacity: 0.08;
-        }
-        .kpi-label {
-            font-size: 0.72rem; font-weight: 600;
-            color: var(--text-color); opacity: 0.55;
-            text-transform: uppercase; letter-spacing: .05em; margin-bottom: .35rem;
-        }
-        .kpi-value { font-size: 1.65rem; font-weight: 700; color: var(--text-color); line-height: 1; }
-        .kpi-unit  { font-size: 0.75rem; font-weight: 500; color: var(--text-color); opacity: 0.5; margin-left: .25rem; }
-        .kpi-sub   { font-size: 0.75rem; color: var(--text-color); opacity: 0.45; margin-top: .3rem; }
+        /* ── KPI cards ── */
+        .kpi-card {{
+            flex:1; min-width:140px;
+            background:{c['card']};
+            border-radius:14px;
+            padding:1.15rem 1.35rem;
+            box-shadow:0 2px 8px {c['shadow']};
+            border-top:4px solid var(--accent);
+            position:relative; overflow:hidden;
+        }}
+        .kpi-card::after {{
+            content:''; position:absolute; right:-14px; top:-14px;
+            width:72px; height:72px; border-radius:50%;
+            background:var(--accent); opacity:.08;
+        }}
+        .kpi-label {{ font-size:.72rem; font-weight:600; color:{c['subtext']}; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.35rem; }}
+        .kpi-value {{ font-size:1.65rem; font-weight:700; color:{c['text']}; line-height:1; }}
+        .kpi-unit  {{ font-size:.75rem; font-weight:500; color:{c['subtext']}; margin-left:.25rem; }}
+        .kpi-sub   {{ font-size:.75rem; color:{c['subtext']}; margin-top:.3rem; }}
 
         /* ── Section card ── */
-        .section-card {
-            background: var(--secondary-background-color);
-            border-radius: 14px;
-            padding: 1.5rem 1.75rem;
-            margin-bottom: 1.25rem;
-            box-shadow: 0 1px 6px rgba(0,0,0,0.1);
-        }
-        .section-card h2 {
-            font-size: 1rem; font-weight: 700; color: #60a5fa;
-            margin: 0 0 1rem; padding-bottom: 0.6rem;
-            border-bottom: 2px solid rgba(96,165,250,0.25);
-            display: flex; align-items: center; gap: .5rem;
-        }
+        .section-card {{
+            background:{c['card']};
+            border-radius:14px;
+            padding:1.5rem 1.75rem;
+            margin-bottom:1.25rem;
+            box-shadow:0 1px 6px {c['shadow']};
+        }}
+        .section-card h2 {{
+            font-size:1rem; font-weight:700; color:{c['section_h2']};
+            margin:0 0 1rem; padding-bottom:.6rem;
+            border-bottom:2px solid {c['section_line']};
+            display:flex; align-items:center; gap:.5rem;
+        }}
 
-        /* ── Report blocks — rgba tint works in both light & dark ── */
-        .report-block {
-            border-left: 4px solid #3b82f6;
-            border-radius: 0 10px 10px 0;
-            padding: 1rem 1.2rem;
-            margin-bottom: 1rem;
-        }
-        .report-block h3 {
-            font-size: 0.85rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .06em; margin: 0 0 .5rem;
-        }
-        .report-block p  { font-size: 0.875rem; color: var(--text-color); line-height: 1.65; margin: 0; }
-        .report-block ul { font-size: 0.875rem; color: var(--text-color); padding-left: 1.2rem; margin: 0; line-height: 1.7; }
+        /* ── Report blocks ── */
+        .report-block {{
+            border-left:4px solid #3b82f6;
+            border-radius:0 10px 10px 0;
+            padding:1rem 1.2rem;
+            margin-bottom:1rem;
+        }}
+        .report-block h3 {{ font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin:0 0 .5rem; }}
+        .report-block p  {{ font-size:.875rem; color:{c['text']}; line-height:1.65; margin:0; }}
+        .report-block ul {{ font-size:.875rem; color:{c['text']}; padding-left:1.2rem; margin:0; line-height:1.7; }}
 
-        .report-block.exec     { border-color: #3b82f6; background: rgba(59,130,246,0.08); }
-        .report-block.exec h3  { color: #60a5fa; }
-        .report-block.config   { border-color: #8b5cf6; background: rgba(139,92,246,0.08); }
-        .report-block.config h3{ color: #a78bfa; }
-        .report-block.cost     { border-color: #10b981; background: rgba(16,185,129,0.08); }
-        .report-block.cost h3  { color: #34d399; }
-        .report-block.dispatch { border-color: #f59e0b; background: rgba(245,158,11,0.08); }
-        .report-block.dispatch h3 { color: #fbbf24; }
-        .report-block.tou      { border-color: #06b6d4; background: rgba(6,182,212,0.08); }
-        .report-block.tou h3   { color: #22d3ee; }
-        .report-block.rec      { border-color: #ef4444; background: rgba(239,68,68,0.08); }
-        .report-block.rec h3   { color: #f87171; }
-        .report-block.limit    { border-color: #9ca3af; background: rgba(156,163,175,0.08); }
-        .report-block.limit h3 { color: #9ca3af; }
+        .report-block.exec     {{ border-color:#3b82f6; background:rgba(59,130,246,.08); }}
+        .report-block.exec h3  {{ color:#60a5fa; }}
+        .report-block.config   {{ border-color:#8b5cf6; background:rgba(139,92,246,.08); }}
+        .report-block.config h3{{ color:#a78bfa; }}
+        .report-block.cost     {{ border-color:#10b981; background:rgba(16,185,129,.08); }}
+        .report-block.cost h3  {{ color:#34d399; }}
+        .report-block.dispatch {{ border-color:#f59e0b; background:rgba(245,158,11,.08); }}
+        .report-block.dispatch h3 {{ color:#fbbf24; }}
+        .report-block.tou      {{ border-color:#06b6d4; background:rgba(6,182,212,.08); }}
+        .report-block.tou h3   {{ color:#22d3ee; }}
+        .report-block.rec      {{ border-color:#ef4444; background:rgba(239,68,68,.08); }}
+        .report-block.rec h3   {{ color:#f87171; }}
+        .report-block.limit    {{ border-color:#9ca3af; background:rgba(156,163,175,.08); }}
+        .report-block.limit h3 {{ color:#9ca3af; }}
 
         /* ── TOU table ── */
-        .tou-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-        .tou-table th {
-            background: #1e3a8a; color: white; font-weight: 600;
-            padding: 0.55rem 0.75rem; text-align: center;
-        }
-        .tou-table td {
-            padding: 0.5rem 0.75rem; text-align: center;
-            color: var(--text-color);
-            border-bottom: 1px solid rgba(128,128,128,0.15);
-        }
-        .tou-table tr:nth-child(even) td { background: rgba(128,128,128,0.06); }
-        .badge-off { background:rgba(59,130,246,0.15);  color:#60a5fa;  border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }
-        .badge-mid { background:rgba(245,158,11,0.15);  color:#fbbf24;  border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }
-        .badge-on  { background:rgba(236,72,153,0.15);  color:#f472b6;  border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }
+        .tou-table {{ width:100%; border-collapse:collapse; font-size:.82rem; }}
+        .tou-table th {{ background:#1e3a8a; color:#fff; font-weight:600; padding:.55rem .75rem; text-align:center; }}
+        .tou-table td {{ padding:.5rem .75rem; text-align:center; color:{c['text']}; border-bottom:1px solid {c['tou_border']}; }}
+        .tou-table tr:nth-child(even) td {{ background:{c['tou_td_bg']}; }}
+        .badge-off {{ background:rgba(59,130,246,.15);  color:#60a5fa; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
+        .badge-mid {{ background:rgba(245,158,11,.15);  color:#fbbf24; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
+        .badge-on  {{ background:rgba(236,72,153,.15);  color:#f472b6; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
 
         /* ── Streamlit overrides ── */
-        div[data-testid="stTabs"] button[role="tab"] { font-weight: 600; font-size: 0.875rem; }
-        div[data-testid="stButton"] button { border-radius: 10px; font-weight: 600; }
-        div[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
+        div[data-testid="stTabs"] button[role="tab"] {{ font-weight:600; font-size:.875rem; }}
+        div[data-testid="stButton"] button {{ border-radius:10px; font-weight:600; }}
+        div[data-testid="stDataFrame"] {{ border-radius:10px; overflow:hidden; }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -360,21 +375,13 @@ def run_workflow(name, description, config, store):
 # ─────────────────────────────────────────
 
 def render_kpi_cards(metrics):
-    total_cost = metrics.get("total_cost", 0)
-    pv_share = metrics.get("pv_share", 0)
-    total_grid = metrics.get("total_grid", 0)
-    total_gen = metrics.get("total_generation", 0)
-    peak_supply = metrics.get("peak_supply", 0)
-    peak_time = metrics.get("peak_time", "-")
-
     cards = [
-        {"label": "Total Cost",        "value": f"{total_cost:,.0f}", "unit": "KRW", "sub": "Optimized system cost",  "accent": "#2563eb"},
-        {"label": "PV Renewable Share", "value": f"{pv_share:.1f}",   "unit": "%",   "sub": "of total supply",        "accent": "#10b981"},
-        {"label": "Grid Import",        "value": f"{total_grid:,.1f}","unit": "MWh", "sub": "External grid usage",    "accent": "#8b5cf6"},
-        {"label": "Generator Output",   "value": f"{total_gen:,.1f}", "unit": "MWh", "sub": "GT + SMR combined",      "accent": "#f59e0b"},
-        {"label": "Peak Demand",        "value": f"{peak_supply:,.1f}","unit": "MW", "sub": f"@ {peak_time}",         "accent": "#ef4444"},
+        {"label": "Total Cost",        "value": f"{metrics.get('total_cost', 0):,.0f}",    "unit": "KRW", "sub": "Optimized system cost", "accent": "#2563eb"},
+        {"label": "PV Renewable Share", "value": f"{metrics.get('pv_share', 0):.1f}",       "unit": "%",   "sub": "of total supply",       "accent": "#10b981"},
+        {"label": "Grid Import",        "value": f"{metrics.get('total_grid', 0):,.1f}",    "unit": "MWh", "sub": "External grid usage",   "accent": "#8b5cf6"},
+        {"label": "Generator Output",   "value": f"{metrics.get('total_generation', 0):,.1f}", "unit": "MWh", "sub": "GT + SMR combined",  "accent": "#f59e0b"},
+        {"label": "Peak Demand",        "value": f"{metrics.get('peak_supply', 0):,.1f}",   "unit": "MW",  "sub": f"@ {metrics.get('peak_time', '-')}", "accent": "#ef4444"},
     ]
-
     cols = st.columns(5)
     for col, card in zip(cols, cards):
         with col:
@@ -382,10 +389,7 @@ def render_kpi_cards(metrics):
                 f"""
                 <div class="kpi-card" style="--accent:{card['accent']}">
                   <div class="kpi-label">{card['label']}</div>
-                  <div>
-                    <span class="kpi-value">{card['value']}</span>
-                    <span class="kpi-unit">{card['unit']}</span>
-                  </div>
+                  <div><span class="kpi-value">{card['value']}</span><span class="kpi-unit">{card['unit']}</span></div>
                   <div class="kpi-sub">{card['sub']}</div>
                 </div>
                 """,
@@ -403,7 +407,7 @@ _SECTION_META = [
     (r"cost structure",                  "cost",     "💰 Cost Structure"),
     (r"dispatch strategy",               "dispatch", "📊 Dispatch Strategy"),
     (r"tou.based operation|time.of.use", "tou",      "🕐 TOU Operation Strategy"),
-    (r"assessment.*recommendation|recommendation", "rec", "💡 Recommendations"),
+    (r"assessment.*recommendation|recommendation", "rec",   "💡 Recommendations"),
     (r"data limitation|limitation|assumption",     "limit", "⚠️ Limitations & Assumptions"),
 ]
 
@@ -418,10 +422,8 @@ def _classify_section(title: str) -> tuple[str, str]:
 
 def render_ai_report(report_text: str):
     st.markdown('<div class="section-card"><h2>🤖 AI Analysis Report</h2>', unsafe_allow_html=True)
-
     raw_sections = re.split(r'\n(?=#{1,3}\s)', report_text.strip())
     blocks_html = ""
-
     for chunk in raw_sections:
         chunk = chunk.strip()
         if not chunk:
@@ -433,11 +435,8 @@ def render_ai_report(report_text: str):
         else:
             title = "Summary"
             body_raw = chunk
-
         cls, display_title = _classify_section(title)
-        body_html = _body_to_html(body_raw)
-        blocks_html += f'<div class="report-block {cls}"><h3>{display_title}</h3>{body_html}</div>'
-
+        blocks_html += f'<div class="report-block {cls}"><h3>{display_title}</h3>{_body_to_html(body_raw)}</div>'
     st.markdown(blocks_html, unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -446,7 +445,6 @@ def _body_to_html(text: str) -> str:
     lines = text.splitlines()
     html_parts = []
     list_open = False
-
     for line in lines:
         line = line.strip()
         if not line:
@@ -454,7 +452,6 @@ def _body_to_html(text: str) -> str:
                 html_parts.append("</ul>")
                 list_open = False
             continue
-
         is_bullet = line.startswith("- ") or line.startswith("* ")
         if is_bullet:
             if not list_open:
@@ -468,7 +465,6 @@ def _body_to_html(text: str) -> str:
                 list_open = False
             para = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
             html_parts.append(f"<p>{para}</p>")
-
     if list_open:
         html_parts.append("</ul>")
     return "\n".join(html_parts)
@@ -480,11 +476,12 @@ def _body_to_html(text: str) -> str:
 
 def render_result(result):
     metrics = result.get("metrics") or {}
+    c = _DARK if st.session_state.get("dark_mode") else _LIGHT
 
     st.markdown(
-        '<div class="section-card" style="padding:1.25rem 1.75rem;">'
-        '<h2 style="font-size:1rem;font-weight:700;color:#60a5fa;margin:0 0 1rem;'
-        'padding-bottom:.6rem;border-bottom:2px solid rgba(96,165,250,0.25);">📈 Key Performance Indicators</h2>',
+        f'<div class="section-card" style="padding:1.25rem 1.75rem;">'
+        f'<h2 style="font-size:1rem;font-weight:700;color:{c["section_h2"]};margin:0 0 1rem;'
+        f'padding-bottom:.6rem;border-bottom:2px solid {c["section_line"]};">📈 Key Performance Indicators</h2>',
         unsafe_allow_html=True,
     )
     render_kpi_cards(metrics)
@@ -522,7 +519,6 @@ def _render_tou_table(rows):
     if not rows:
         st.info("No dispatch data.")
         return
-
     df = pd.DataFrame(rows)
     gen_cols = [
         c for c in df.columns
@@ -545,32 +541,28 @@ def _render_tou_table(rows):
         pv_mw=("pv_mw", "mean"),
         ess_mw=("ess_discharge_mw", "mean"),
         **{col: (col, "mean") for col in gen_cols},
-    ).reset_index()
+    ).reset_index().sort_values("period", key=lambda s: s.map({"off": 0, "mid": 1, "on": 2}))
 
-    period_order = {"off": 0, "mid": 1, "on": 2}
     period_badge = {
         "off": '<span class="badge-off">Off-Peak</span>',
         "mid": '<span class="badge-mid">Mid-Peak</span>',
         "on":  '<span class="badge-on">On-Peak</span>',
     }
-    summary = summary.sort_values("period", key=lambda s: s.map(period_order))
-
-    header_cells = "<tr><th>Period</th><th>PV (MW)</th>"
+    header = "<tr><th>Period</th><th>PV (MW)</th>"
     for col in gen_cols:
-        header_cells += f"<th>{col.replace('_mw','').upper()} (MW)</th>"
-    header_cells += "<th>ESS Dis (MW)</th></tr>"
+        header += f"<th>{col.replace('_mw','').upper()} (MW)</th>"
+    header += "<th>ESS Dis (MW)</th></tr>"
 
     body = ""
     for _, row in summary.iterrows():
-        badge = period_badge.get(row["period"], row["period"])
-        cells = f"<td>{badge}</td><td>{row['pv_mw']:.1f}</td>"
+        cells = f"<td>{period_badge.get(row['period'], row['period'])}</td><td>{row['pv_mw']:.1f}</td>"
         for col in gen_cols:
             cells += f"<td>{row.get(col, 0):.1f}</td>"
         cells += f"<td>{row['ess_mw']:.1f}</td>"
         body += f"<tr>{cells}</tr>"
 
     st.markdown(
-        f'<table class="tou-table"><thead>{header_cells}</thead><tbody>{body}</tbody></table>',
+        f'<table class="tou-table"><thead>{header}</thead><tbody>{body}</tbody></table>',
         unsafe_allow_html=True,
     )
 
@@ -583,13 +575,11 @@ def render_history(store):
     if not store.enabled:
         st.info("Supabase secrets가 설정되면 과거 실행 이력이 여기에 표시됩니다.")
         return
-
     try:
         runs = store.list_runs(limit=30)
     except Exception as exc:
         st.error(f"History 조회 실패: {exc}")
         return
-
     if not runs:
         st.info("저장된 실행 이력이 없습니다.")
         return
@@ -598,21 +588,12 @@ def render_history(store):
         f"{row.get('created_at', '')} | {(row.get('scenarios') or {}).get('name', 'Untitled')} | {row.get('status', '')}": row
         for row in runs
     }
-    selected_label = st.selectbox("Past runs", list(options.keys()))
-    selected = options[selected_label]
-
+    selected = options[st.selectbox("Past runs", list(options.keys()))]
     metrics = selected.get("metrics") or {}
     if metrics:
         render_kpi_cards(metrics)
-
-    st.json(
-        {
-            "scenario": selected.get("scenarios"),
-            "metrics": metrics,
-            "status": selected.get("status"),
-            "error": selected.get("error_message"),
-        }
-    )
+    st.json({"scenario": selected.get("scenarios"), "metrics": metrics,
+             "status": selected.get("status"), "error": selected.get("error_message")})
     table = selected.get("result_table") or []
     if table:
         st.dataframe(pd.DataFrame(table), use_container_width=True, height=320)
@@ -625,7 +606,18 @@ def render_history(store):
 # ─────────────────────────────────────────
 
 def main():
-    inject_css()
+    if "dark_mode" not in st.session_state:
+        st.session_state["dark_mode"] = False
+
+    # Theme toggle — top right
+    toggle_col, _ = st.columns([1, 11])
+    with toggle_col:
+        label = "🌙 Dark" if not st.session_state["dark_mode"] else "☀️ Light"
+        if st.button(label, key="theme_btn"):
+            st.session_state["dark_mode"] = not st.session_state["dark_mode"]
+            st.rerun()
+
+    inject_css(st.session_state["dark_mode"])
     configure_runtime_secrets()
     store, store_mode = get_supabase_store()
     render_page_header(store_mode)

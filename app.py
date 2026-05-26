@@ -42,7 +42,7 @@ _DARK = {
     "section_line": "rgba(96,165,250,0.2)",
     "tou_td_bg":    "rgba(255,255,255,0.03)",
     "tou_border":   "rgba(255,255,255,0.07)",
-    "input_border": "#334155",
+    "input_border": "rgba(255,255,255,0.5)",
 }
 
 
@@ -154,7 +154,21 @@ def inject_css(dark: bool):
         .badge-mid {{ background:rgba(245,158,11,.15);  color:#fbbf24; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
         .badge-on  {{ background:rgba(236,72,153,.15);  color:#f472b6; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
 
-        /* ── Input borders ── */
+        /* ── Widget labels & general text ── */
+        label p, label span,
+        [data-testid$="Label"] p,
+        [data-testid="stWidgetLabel"] p,
+        div[data-testid="stMarkdownContainer"] p,
+        div[data-testid="stMarkdownContainer"] li,
+        div[data-testid="stCaption"] p,
+        div[data-testid="stText"] p,
+        div[data-testid="stExpander"] summary p,
+        div[data-testid="stExpander"] summary span,
+        div[data-testid="stTabs"] button p {{
+            color: {c['text']} !important;
+        }}
+
+        /* ── Input borders & backgrounds ── */
         div[data-testid="stNumberInput"] input,
         div[data-testid="stTextInput"] input,
         div[data-testid="stTextArea"] textarea {{

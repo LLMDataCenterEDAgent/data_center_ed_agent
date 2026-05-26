@@ -28,7 +28,7 @@ def inject_css(dark: bool):
         subtext    = "#94a3b8"
         input_bg   = "#111827"
         input_text = "#f8fafc"
-        input_bd   = "rgba(148,163,184,0.55)"
+        input_bd   = "rgba(148,163,184,0.45)"
         shadow     = "rgba(0,0,0,0.3)"
         h2_color   = "#60a5fa"
         h2_border  = "rgba(96,165,250,0.2)"
@@ -41,7 +41,7 @@ def inject_css(dark: bool):
         subtext    = "#6b7280"
         input_bg   = "#ffffff"
         input_text = "#111827"
-        input_bd   = "rgba(100,116,139,0.55)"
+        input_bd   = "#cbd5e1"
         shadow     = "rgba(0,0,0,0.08)"
         h2_color   = "#1e3a8a"
         h2_border  = "#eff6ff"
@@ -186,8 +186,8 @@ def inject_css(dark: bool):
         div[data-testid="stTextArea"] textarea {{
             background-color: {input_bg} !important;
             color: {input_text} !important;
-            border: 1px solid {input_bd} !important;
-            border-radius: 8px !important;
+            border: 0 !important;
+            border-radius: 10px !important;
             box-shadow: none !important;
             outline: none !important;
         }}
@@ -195,25 +195,36 @@ def inject_css(dark: bool):
         div[data-baseweb="textarea"] {{
             background-color: {input_bg} !important;
             border: 1px solid {input_bd} !important;
-            border-radius: 8px !important;
+            border-radius: 10px !important;
             box-shadow: none !important;
             outline: none !important;
         }}
+        div[data-testid="stTextInput"] div[data-baseweb="base-input"],
+        div[data-testid="stNumberInput"] div[data-baseweb="base-input"],
+        div[data-testid="stTextArea"] div[data-baseweb="base-input"],
+        div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+        div[data-testid="stNumberInput"] div[data-baseweb="input"] > div,
+        div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div {{
+            background-color: {input_bg} !important;
+            border-color: {input_bd} !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+        }}
         div[data-baseweb="input"] input,
         div[data-baseweb="textarea"] textarea {{
+            background-color: {input_bg} !important;
             color: {input_text} !important;
             -webkit-text-fill-color: {input_text} !important;
         }}
         div[data-testid="stTextInput"] input:focus,
         div[data-testid="stNumberInput"] input:focus,
         div[data-testid="stTextArea"] textarea:focus {{
-            border-color: #3b82f6 !important;
             box-shadow: none !important;
             outline: none !important;
         }}
         div[data-baseweb="input"]:focus-within,
         div[data-baseweb="textarea"]:focus-within {{
-            border-color: #3b82f6 !important;
+            border-color: #94a3b8 !important;
             box-shadow: none !important;
             outline: none !important;
         }}
@@ -222,6 +233,7 @@ def inject_css(dark: bool):
             color: {input_text} !important;
             border: 1px solid {input_bd} !important;
             box-shadow: none !important;
+            border-radius: 0 !important;
         }}
         div[data-testid="stNumberInput"] svg {{
             fill: {input_text} !important;

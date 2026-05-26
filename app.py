@@ -34,6 +34,9 @@ def configure_runtime_secrets():
         "LICENSEID": st.secrets.get("GRB_LICENSEID", ""),
     }
     if all(gurobi_keys.values()):
+        for key, value in gurobi_keys.items():
+            os.environ[key] = str(value)
+            os.environ[f"GRB_{key}"] = str(value)
         license_path = Path("/tmp/gurobi.lic")
         license_path.write_text(
             "\n".join(f"{key}={value}" for key, value in gurobi_keys.items()) + "\n",

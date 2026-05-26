@@ -42,7 +42,7 @@ _DARK = {
     "section_line": "rgba(96,165,250,0.2)",
     "tou_td_bg":    "rgba(255,255,255,0.03)",
     "tou_border":   "rgba(255,255,255,0.07)",
-    "input_border": "rgba(255,255,255,0.5)",
+    "input_border": "rgba(255,255,255,0.25)",
 }
 
 
@@ -172,16 +172,17 @@ def inject_css(dark: bool):
         div[data-testid="stNumberInput"] input,
         div[data-testid="stTextInput"] input,
         div[data-testid="stTextArea"] textarea {{
-            border: 1.5px solid {c['input_border']} !important;
-            border-radius: 8px !important;
+            border: 1px solid {c['input_border']} !important;
+            border-radius: 6px !important;
             background: {c['card']} !important;
             color: {c['text']} !important;
+            box-shadow: none !important;
         }}
         div[data-testid="stNumberInput"] > div,
         div[data-testid="stTextInput"] > div {{
-            border: 1.5px solid {c['input_border']} !important;
-            border-radius: 8px !important;
-            background: {c['card']} !important;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }}
 
         /* ── Streamlit overrides ── */

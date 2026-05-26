@@ -1,5 +1,6 @@
 import tempfile
 import os
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -11,17 +12,188 @@ from ui.reporting import create_pdf_report, plot_results, solution_rows, summary
 from workflow.graph import build_graph
 
 
-st.set_page_config(page_title="Data Center ED Agent", page_icon="DC", layout="wide")
+st.set_page_config(page_title="Data Center ED Agent", page_icon="⚡", layout="wide")
 
+
+def inject_css():
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        html, body, [class*="css"] {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* ── Page background ── */
+        .stApp {
+            background: #f0f2f6;
+        }
+
+        /* ── Dashboard header ── */
+        .db-header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #2563eb 100%);
+            border-radius: 16px;
+            padding: 2rem 2.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .db-header h1 {
+            color: #ffffff;
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .db-header p {
+            color: #93c5fd;
+            font-size: 0.875rem;
+            margin: 0.35rem 0 0;
+        }
+        .db-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 0.3rem 0.9rem;
+            color: #bfdbfe;
+            font-size: 0.78rem;
+            font-weight: 500;
+            margin: 0.25rem 0.2rem 0;
+        }
+        .db-badge.ok  { background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.4); color: #6ee7b7; }
+        .db-badge.warn{ background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: #fcd34d; }
+
+        /* ── KPI cards ── */
+        .kpi-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .kpi-card {
+            flex: 1; min-width: 140px;
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 1.15rem 1.35rem;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+            border-top: 4px solid var(--accent);
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi-card::after {
+            content: '';
+            position: absolute; right: -14px; top: -14px;
+            width: 72px; height: 72px;
+            border-radius: 50%;
+            background: var(--accent);
+            opacity: 0.06;
+        }
+        .kpi-label  { font-size: 0.72rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .35rem; }
+        .kpi-value  { font-size: 1.65rem; font-weight: 700; color: #111827; line-height: 1; }
+        .kpi-unit   { font-size: 0.75rem; font-weight: 500; color: #9ca3af; margin-left: .25rem; }
+        .kpi-sub    { font-size: 0.75rem; color: #9ca3af; margin-top: .3rem; }
+
+        /* ── Section card ── */
+        .section-card {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 1.5rem 1.75rem;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+        }
+        .section-card h2 {
+            font-size: 1rem; font-weight: 700; color: #1e3a8a;
+            margin: 0 0 1rem; padding-bottom: 0.6rem;
+            border-bottom: 2px solid #eff6ff;
+            display: flex; align-items: center; gap: .5rem;
+        }
+
+        /* ── Report sections ── */
+        .report-block {
+            background: #f8faff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 0 10px 10px 0;
+            padding: 1rem 1.2rem;
+            margin-bottom: 1rem;
+        }
+        .report-block h3 {
+            font-size: 0.85rem; font-weight: 700; color: #1d4ed8;
+            text-transform: uppercase; letter-spacing: .06em;
+            margin: 0 0 .5rem;
+        }
+        .report-block p  { font-size: 0.875rem; color: #374151; line-height: 1.65; margin: 0; }
+        .report-block ul { font-size: 0.875rem; color: #374151; padding-left: 1.2rem; margin: 0; line-height: 1.7; }
+
+        .report-block.exec   { border-color: #2563eb; background: #eff6ff; }
+        .report-block.config { border-color: #7c3aed; background: #f5f3ff; }
+        .report-block.config h3 { color: #6d28d9; }
+        .report-block.cost   { border-color: #059669; background: #f0fdf4; }
+        .report-block.cost h3 { color: #047857; }
+        .report-block.dispatch{ border-color: #d97706; background: #fffbeb; }
+        .report-block.dispatch h3 { color: #b45309; }
+        .report-block.tou    { border-color: #0891b2; background: #ecfeff; }
+        .report-block.tou h3 { color: #0e7490; }
+        .report-block.rec    { border-color: #dc2626; background: #fef2f2; }
+        .report-block.rec h3 { color: #b91c1c; }
+        .report-block.limit  { border-color: #9ca3af; background: #f9fafb; }
+        .report-block.limit h3 { color: #6b7280; }
+
+        /* ── TOU table ── */
+        .tou-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .tou-table th {
+            background: #1e3a8a; color: white; font-weight: 600;
+            padding: 0.55rem 0.75rem; text-align: center;
+        }
+        .tou-table td { padding: 0.5rem 0.75rem; text-align: center; border-bottom: 1px solid #e5e7eb; }
+        .tou-table tr:nth-child(even) td { background: #f8faff; }
+        .badge-off  { background:#dbeafe; color:#1d4ed8; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }
+        .badge-mid  { background:#fef3c7; color:#b45309; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }
+        .badge-on   { background:#fce7f3; color:#be185d; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }
+
+        /* ── Streamlit overrides ── */
+        div[data-testid="stTabs"] button[role="tab"] {
+            font-weight: 600; font-size: 0.875rem;
+        }
+        div[data-testid="stButton"] button {
+            border-radius: 10px; font-weight: 600;
+        }
+        div[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
+        div[data-testid="stExpander"] { background: #ffffff; border-radius: 10px; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ─────────────────────────────────────────
+#  Header
+# ─────────────────────────────────────────
 
 def render_page_header(store_mode):
-    st.title("Data Center Energy Dispatch Agent")
-    st.caption("Scenario-based optimization for PV, GT, SMR, ESS data-center microgrids.")
+    supabase_ok = store_mode == "supabase"
+    gurobi_ok = _has_gurobi_wls_secrets()
+    openai_ok = bool(st.secrets.get("OPENAI_API_KEY", ""))
 
-    status_cols = st.columns(3)
-    status_cols[0].success("Supabase Connected" if store_mode == "supabase" else "Local History Mode")
-    status_cols[1].success("Gurobi WLS Ready" if _has_gurobi_wls_secrets() else "Gurobi Secrets Missing")
-    status_cols[2].success("OpenAI Report Enabled" if st.secrets.get("OPENAI_API_KEY", "") else "Fallback Report Mode")
+    badges = (
+        f'<span class="db-badge {"ok" if supabase_ok else "warn"}">{"✓" if supabase_ok else "!"} Supabase</span>'
+        f'<span class="db-badge {"ok" if gurobi_ok else "warn"}">{"✓" if gurobi_ok else "!"} Gurobi WLS</span>'
+        f'<span class="db-badge {"ok" if openai_ok else "warn"}">{"✓" if openai_ok else "!"} OpenAI</span>'
+    )
+    st.markdown(
+        f"""
+        <div class="db-header">
+          <div>
+            <h1>⚡ Data Center Energy Dispatch</h1>
+            <p>Scenario-based optimization for PV · GT · SMR · ESS microgrids</p>
+            <div style="margin-top:.6rem">{badges}</div>
+          </div>
+          <div style="text-align:right; color:#93c5fd; font-size:.75rem; line-height:1.8;">
+            <div style="font-size:1.5rem">🏭</div>
+            <div>LangGraph Agent</div>
+            <div>Gurobi Optimizer</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _has_gurobi_wls_secrets():
@@ -30,6 +202,10 @@ def _has_gurobi_wls_secrets():
         for key in ("GRB_WLSACCESSID", "GRB_WLSSECRET", "GRB_LICENSEID")
     )
 
+
+# ─────────────────────────────────────────
+#  Store / secrets
+# ─────────────────────────────────────────
 
 def get_supabase_store():
     url = st.secrets.get("SUPABASE_URL", "")
@@ -60,15 +236,19 @@ def configure_runtime_secrets():
             encoding="utf-8",
         )
         os.environ["GRB_LICENSE_FILE"] = str(license_path)
-        print(f"Gurobi WLS license configured at {license_path}")
 
 
 def get_graph():
     return build_graph()
 
 
+# ─────────────────────────────────────────
+#  Scenario form
+# ─────────────────────────────────────────
+
 def scenario_form():
-    st.markdown("#### Scenario")
+    st.markdown('<div class="section-card"><h2>🎛️ Scenario Configuration</h2>', unsafe_allow_html=True)
+
     scenario_col1, scenario_col2, scenario_col3 = st.columns([2, 1, 1])
     with scenario_col1:
         name = st.text_input("Scenario name", value="Data center ED run")
@@ -81,11 +261,10 @@ def scenario_form():
         description = st.text_area(
             "Description",
             value="PV, SMR, GT, ESS를 활용해 15분 단위 데이터센터 경제급전을 수행한다.",
-            help="History에서 실행 목적을 구분하기 위한 메모입니다. 최적화 계산값은 숫자 입력값으로 결정됩니다.",
-            height=90,
+            height=80,
         )
 
-    st.markdown("#### Generation Assets")
+    st.markdown("---")
     gen_col1, gen_col2, gen_col3, gen_col4 = st.columns(4)
     with gen_col1:
         gt_count = st.number_input("GT count", min_value=1, max_value=20, value=2, step=1)
@@ -94,7 +273,7 @@ def scenario_form():
     with gen_col3:
         gt_max = st.number_input("GT max MW", min_value=0.0, value=170.0, step=5.0)
     with gen_col4:
-        gt_cost = st.number_input("GT cost coefficient", min_value=0.0, value=0.03, step=0.001, format="%.3f")
+        gt_cost = st.number_input("GT cost coeff", min_value=0.0, value=0.03, step=0.001, format="%.3f")
 
     smr_col1, smr_col2, smr_col3 = st.columns(3)
     with smr_col1:
@@ -102,14 +281,16 @@ def scenario_form():
     with smr_col2:
         smr_max = st.number_input("SMR max MW", min_value=0.0, value=121.0, step=1.0)
     with smr_col3:
-        smr_cost = st.number_input("SMR cost coefficient", min_value=0.0, value=0.002, step=0.001, format="%.3f")
+        smr_cost = st.number_input("SMR cost coeff", min_value=0.0, value=0.002, step=0.001, format="%.3f")
 
-    st.markdown("#### Storage")
+    st.markdown("---")
     storage_col1, storage_col2 = st.columns(2)
     with storage_col1:
         ess_capacity_mwh = st.number_input("ESS capacity MWh", min_value=0.0, value=160.0, step=10.0)
     with storage_col2:
         ess_power_mw = st.number_input("ESS max power MW", min_value=0.0, value=40.0, step=5.0)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
     config = {
         "start_row": int(start_row),
@@ -126,6 +307,10 @@ def scenario_form():
     }
     return name, description, config
 
+
+# ─────────────────────────────────────────
+#  Workflow runner
+# ─────────────────────────────────────────
 
 def run_workflow(name, description, config, store):
     scenario_row = None
@@ -150,6 +335,7 @@ def run_workflow(name, description, config, store):
         else:
             detail = "Solver did not return solution_output."
         raise RuntimeError(f"{detail} State keys: {available_keys}")
+
     rows = solution_rows(solution_data, params)
     metrics = summary_metrics(solution_data, params)
 
@@ -158,7 +344,7 @@ def run_workflow(name, description, config, store):
         pdf_path = Path(tmp_dir) / "Final_Report.pdf"
         plot_results(solution_data, params, image_path)
         if not image_path.exists():
-            raise RuntimeError("Graph image was not generated because the optimization result is empty.")
+            raise RuntimeError("Graph image was not generated.")
         create_pdf_report(result.get("explanation"), image_path, pdf_path)
         image_bytes = image_path.read_bytes()
         pdf_bytes = pdf_path.read_bytes()
@@ -185,41 +371,267 @@ def run_workflow(name, description, config, store):
     }
 
 
-def render_metric_bar(metrics):
-    items = [
-        ("Total Cost", f"{metrics.get('total_cost', 0):,.0f}", "KRW"),
-        ("PV Share", f"{metrics.get('pv_share', 0):.1f}", "%"),
-        ("Grid", f"{metrics.get('total_grid', 0):,.1f}", "MW"),
-        ("Generation", f"{metrics.get('total_generation', 0):,.1f}", "MW"),
-        ("Peak", f"{metrics.get('peak_supply', 0):,.1f}", "MW"),
-    ]
-    cols = st.columns(5)
-    for col, (label, value, unit) in zip(cols, items):
-        with col:
-            st.caption(label)
-            st.markdown(f"**{value}** `{unit}`")
+# ─────────────────────────────────────────
+#  KPI cards
+# ─────────────────────────────────────────
 
+def render_kpi_cards(metrics):
+    total_cost = metrics.get("total_cost", 0)
+    pv_share = metrics.get("pv_share", 0)
+    total_grid = metrics.get("total_grid", 0)
+    total_gen = metrics.get("total_generation", 0)
+    peak_supply = metrics.get("peak_supply", 0)
+    peak_time = metrics.get("peak_time", "-")
+
+    cards = [
+        {
+            "label": "Total Cost",
+            "value": f"{total_cost:,.0f}",
+            "unit": "KRW",
+            "sub": "Optimized system cost",
+            "accent": "#2563eb",
+        },
+        {
+            "label": "PV Renewable Share",
+            "value": f"{pv_share:.1f}",
+            "unit": "%",
+            "sub": "of total supply",
+            "accent": "#059669",
+        },
+        {
+            "label": "Grid Import",
+            "value": f"{total_grid:,.1f}",
+            "unit": "MWh",
+            "sub": "External grid usage",
+            "accent": "#7c3aed",
+        },
+        {
+            "label": "Generator Output",
+            "value": f"{total_gen:,.1f}",
+            "unit": "MWh",
+            "sub": "GT + SMR combined",
+            "accent": "#d97706",
+        },
+        {
+            "label": "Peak Demand",
+            "value": f"{peak_supply:,.1f}",
+            "unit": "MW",
+            "sub": f"@ {peak_time}",
+            "accent": "#dc2626",
+        },
+    ]
+
+    cols = st.columns(5)
+    for col, card in zip(cols, cards):
+        with col:
+            st.markdown(
+                f"""
+                <div class="kpi-card" style="--accent:{card['accent']}">
+                  <div class="kpi-label">{card['label']}</div>
+                  <div>
+                    <span class="kpi-value">{card['value']}</span>
+                    <span class="kpi-unit">{card['unit']}</span>
+                  </div>
+                  <div class="kpi-sub">{card['sub']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+# ─────────────────────────────────────────
+#  Report renderer
+# ─────────────────────────────────────────
+
+_SECTION_META = [
+    (r"executive summary",         "exec",     "📋 Executive Summary"),
+    (r"system configuration",      "config",   "⚙️ System Configuration"),
+    (r"cost structure",            "cost",     "💰 Cost Structure"),
+    (r"dispatch strategy",         "dispatch", "📊 Dispatch Strategy"),
+    (r"tou.based operation|time.of.use", "tou", "🕐 TOU Operation Strategy"),
+    (r"assessment.*recommendation|recommendation", "rec", "💡 Recommendations"),
+    (r"data limitation|limitation|assumption", "limit", "⚠️ Limitations & Assumptions"),
+]
+
+
+def _classify_section(title: str) -> tuple[str, str]:
+    t = title.lower()
+    for pattern, cls, label in _SECTION_META:
+        if re.search(pattern, t):
+            return cls, label
+    return "exec", title
+
+
+def render_ai_report(report_text: str):
+    st.markdown('<div class="section-card"><h2>🤖 AI Analysis Report</h2>', unsafe_allow_html=True)
+
+    # Split by markdown headings (## or #)
+    raw_sections = re.split(r'\n(?=#{1,3}\s)', report_text.strip())
+    blocks_html = ""
+
+    for chunk in raw_sections:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+
+        heading_match = re.match(r'^(#{1,3})\s+(.*)', chunk)
+        if heading_match:
+            title = heading_match.group(2).strip()
+            body_raw = chunk[heading_match.end():].strip()
+        else:
+            title = "Summary"
+            body_raw = chunk
+
+        cls, display_title = _classify_section(title)
+        body_html = _body_to_html(body_raw)
+        blocks_html += f"""
+        <div class="report-block {cls}">
+          <h3>{display_title}</h3>
+          {body_html}
+        </div>
+        """
+
+    st.markdown(blocks_html, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _body_to_html(text: str) -> str:
+    lines = text.splitlines()
+    html_parts = []
+    list_open = False
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            if list_open:
+                html_parts.append("</ul>")
+                list_open = False
+            continue
+
+        is_bullet = line.startswith("- ") or line.startswith("* ")
+        if is_bullet:
+            if not list_open:
+                html_parts.append("<ul>")
+                list_open = True
+            item = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line[2:].strip())
+            html_parts.append(f"<li>{item}</li>")
+        else:
+            if list_open:
+                html_parts.append("</ul>")
+                list_open = False
+            para = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
+            html_parts.append(f"<p>{para}</p>")
+
+    if list_open:
+        html_parts.append("</ul>")
+
+    return "\n".join(html_parts)
+
+
+# ─────────────────────────────────────────
+#  Result dashboard
+# ─────────────────────────────────────────
 
 def render_result(result):
     metrics = result.get("metrics") or {}
-    render_metric_bar(metrics)
 
-    st.subheader("Energy Mix")
-    st.image(result["image_bytes"], use_container_width=True)
+    # KPI row
+    st.markdown('<div class="section-card" style="padding:1.25rem 1.75rem;">', unsafe_allow_html=True)
+    st.markdown('<h2 style="font-size:1rem;font-weight:700;color:#1e3a8a;margin:0 0 1rem;padding-bottom:.6rem;border-bottom:2px solid #eff6ff;">📈 Key Performance Indicators</h2>', unsafe_allow_html=True)
+    render_kpi_cards(metrics)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.subheader("AI Report")
-    st.markdown(result["report"])
-    st.download_button(
-        "Download PDF",
-        data=result["pdf_bytes"],
-        file_name="data_center_energy_report.pdf",
-        mime="application/pdf",
-        use_container_width=True,
+    # Dispatch chart + TOU table side by side
+    chart_col, tou_col = st.columns([3, 2])
+
+    with chart_col:
+        st.markdown('<div class="section-card"><h2>⚡ Energy Dispatch Mix</h2>', unsafe_allow_html=True)
+        st.image(result["image_bytes"], use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with tou_col:
+        st.markdown('<div class="section-card"><h2>🕐 TOU Period Summary</h2>', unsafe_allow_html=True)
+        _render_tou_table(result.get("rows", []))
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # AI Report
+    render_ai_report(result["report"])
+
+    # Dispatch table + Download
+    dl_col, _ = st.columns([1, 3])
+    with dl_col:
+        st.download_button(
+            "⬇️ Download PDF Report",
+            data=result["pdf_bytes"],
+            file_name="data_center_energy_report.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            type="primary",
+        )
+
+    st.markdown('<div class="section-card"><h2>📋 Dispatch Table</h2>', unsafe_allow_html=True)
+    st.dataframe(pd.DataFrame(result["rows"]), use_container_width=True, height=320)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_tou_table(rows):
+    if not rows:
+        st.info("No dispatch data.")
+        return
+
+    df = pd.DataFrame(rows)
+    gen_cols = [c for c in df.columns if c.endswith("_mw") and not c.startswith(("pv", "ess", "grid", "net", "managed", "balance"))]
+
+    def period_label(t):
+        try:
+            h = int(str(t).split(":")[-2]) if ":" in str(t) else int(str(t).split(" ")[-1].split(":")[0])
+        except Exception:
+            return "off"
+        if 9 <= h < 12 or 13 <= h < 18:
+            return "on"
+        if 7 <= h < 9 or 12 <= h < 13 or 18 <= h < 21:
+            return "mid"
+        return "off"
+
+    df["period"] = df["time"].apply(period_label)
+    summary = df.groupby("period").agg(
+        pv_mw=("pv_mw", "mean"),
+        ess_mw=("ess_discharge_mw", "mean"),
+        **{col: (col, "mean") for col in gen_cols},
+    ).reset_index()
+
+    period_order = {"off": 0, "mid": 1, "on": 2}
+    period_badge = {
+        "off":  '<span class="badge-off">Off-Peak</span>',
+        "mid":  '<span class="badge-mid">Mid-Peak</span>',
+        "on":   '<span class="badge-on">On-Peak</span>',
+    }
+
+    summary = summary.sort_values("period", key=lambda s: s.map(period_order))
+
+    header_cells = "<tr><th>Period</th><th>PV (MW)</th>"
+    for col in gen_cols:
+        header_cells += f"<th>{col.replace('_mw','').upper()} (MW)</th>"
+    header_cells += "<th>ESS Dis (MW)</th></tr>"
+
+    body = ""
+    for _, row in summary.iterrows():
+        badge = period_badge.get(row["period"], row["period"])
+        cells = f"<td>{badge}</td><td>{row['pv_mw']:.1f}</td>"
+        for col in gen_cols:
+            cells += f"<td>{row.get(col, 0):.1f}</td>"
+        cells += f"<td>{row['ess_mw']:.1f}</td>"
+        body += f"<tr>{cells}</tr>"
+
+    st.markdown(
+        f'<table class="tou-table"><thead>{header_cells}</thead><tbody>{body}</tbody></table>',
+        unsafe_allow_html=True,
     )
 
-    st.subheader("Dispatch Table")
-    st.dataframe(pd.DataFrame(result["rows"]), use_container_width=True, height=360)
 
+# ─────────────────────────────────────────
+#  History tab
+# ─────────────────────────────────────────
 
 def render_history(store):
     if not store.enabled:
@@ -242,10 +654,15 @@ def render_history(store):
     }
     selected_label = st.selectbox("Past runs", list(options.keys()))
     selected = options[selected_label]
+
+    metrics = selected.get("metrics") or {}
+    if metrics:
+        render_kpi_cards(metrics)
+
     st.json(
         {
             "scenario": selected.get("scenarios"),
-            "metrics": selected.get("metrics"),
+            "metrics": metrics,
             "status": selected.get("status"),
             "error": selected.get("error_message"),
         }
@@ -254,40 +671,39 @@ def render_history(store):
     if table:
         st.dataframe(pd.DataFrame(table), use_container_width=True, height=320)
     if selected.get("report_text"):
-        st.markdown(selected["report_text"])
+        render_ai_report(selected["report_text"])
 
+
+# ─────────────────────────────────────────
+#  Main
+# ─────────────────────────────────────────
 
 def main():
+    inject_css()
     configure_runtime_secrets()
     store, store_mode = get_supabase_store()
     render_page_header(store_mode)
 
-    run_tab, history_tab = st.tabs(["Run", "History"])
+    run_tab, history_tab = st.tabs(["▶ Run", "🕘 History"])
+
     with run_tab:
         name, description, config = scenario_form()
 
-        with st.expander("Current settings", expanded=False):
+        with st.expander("Current settings preview", expanded=False):
             st.dataframe(
-                pd.DataFrame(
-                    [{"parameter": key, "value": value} for key, value in config.items()]
-                ),
+                pd.DataFrame([{"parameter": k, "value": v} for k, v in config.items()]),
                 use_container_width=True,
                 hide_index=True,
             )
 
-        if st.button("Run LangGraph agent", type="primary"):
+        if st.button("🚀 Run LangGraph Agent", type="primary", use_container_width=True):
             try:
                 with st.status("Running optimization workflow...", expanded=True) as status:
-                    st.write("Saving scenario")
-                    st.write("Solving dispatch with Gurobi")
-                    st.write("Generating graph, report, and PDF")
-                    st.session_state["latest_result"] = run_workflow(
-                        name,
-                        description,
-                        config,
-                        store,
-                    )
-                    status.update(label="Workflow completed", state="complete", expanded=False)
+                    st.write("⏳ Saving scenario...")
+                    st.write("⚙️ Solving dispatch with Gurobi...")
+                    st.write("📊 Generating graph, report, and PDF...")
+                    st.session_state["latest_result"] = run_workflow(name, description, config, store)
+                    status.update(label="✅ Workflow completed", state="complete", expanded=False)
                 st.success("실행이 완료되었습니다.")
             except Exception as exc:
                 if store.enabled:

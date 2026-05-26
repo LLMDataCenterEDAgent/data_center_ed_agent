@@ -26,15 +26,19 @@ Streamlit 기반 데이터센터 경제급전(ED) PoC 애플리케이션입니�
 ## App Flow
 
 ```mermaid
-flowchart LR
-    A["Streamlit scenario input"] --> B["Save scenario to Supabase"]
-    B --> C["Run LangGraph agent"]
-    C --> D["Solve ED model with Gurobi"]
-    D --> E["Render table and graph"]
-    E --> F["Generate AI report"]
-    F --> G["Download PDF"]
-    G --> H["Save run result to Supabase"]
-    H --> I["View past runs in History"]
+flowchart TD
+    A["1. Streamlit scenario input"]
+    B["2. Save scenario to Supabase"]
+    C["3. Run LangGraph agent"]
+    D["4. Solve ED model with Gurobi"]
+    E["5. Render result table"]
+    F["6. Render dispatch graph"]
+    G["7. Generate AI report"]
+    H["8. Download PDF"]
+    I["9. Save run result to Supabase"]
+    J["10. View past runs in History"]
+
+    A --> B --> C --> D --> E --> F --> G --> H --> I --> J
 ```
 
 ## Local Setup

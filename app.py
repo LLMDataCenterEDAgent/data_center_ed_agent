@@ -210,6 +210,20 @@ def inject_css(dark: bool):
             border-radius: 10px !important;
             box-shadow: none !important;
         }}
+        div[data-testid="stNumberInputContainer"] {{
+            background-color: {input_bg} !important;
+            border: 1px solid {input_bd} !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+        }}
+        div[data-testid="stNumberInputContainer"] div[data-baseweb="input"] {{
+            border: 0 !important;
+            border-radius: 10px 0 0 10px !important;
+        }}
+        div[data-testid="stNumberInputContainer"] div[data-baseweb="input"]:focus-within {{
+            border: 0 !important;
+        }}
         div[data-baseweb="input"] input,
         div[data-baseweb="textarea"] textarea {{
             background-color: {input_bg} !important;
@@ -231,9 +245,16 @@ def inject_css(dark: bool):
         div[data-testid="stNumberInput"] button {{
             background-color: {input_bg} !important;
             color: {input_text} !important;
-            border: 1px solid {input_bd} !important;
+            border: 0 !important;
             box-shadow: none !important;
             border-radius: 0 !important;
+        }}
+        div[data-testid="stNumberInputContainer"] button:hover,
+        div[data-testid="stNumberInputContainer"] button:focus {{
+            background-color: {input_bg} !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            outline: none !important;
         }}
         div[data-testid="stNumberInput"] svg {{
             fill: {input_text} !important;

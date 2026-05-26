@@ -28,6 +28,19 @@ def configure_runtime_secrets():
     if openai_key:
         os.environ["OPENAI_API_KEY"] = openai_key
 
+    gurobi_keys = {
+        "WLSACCESSID": st.secrets.get("GRB_WLSACCESSID", ""),
+        "WLSSECRET": st.secrets.get("GRB_WLSSECRET", ""),
+        "LICENSEID": st.secrets.get("GRB_LICENSEID", ""),
+    }
+    if all(gurobi_keys.values()):
+        license_path = Path("/tmp/gurobi.lic")
+        license_path.write_text(
+            "\n".join(f"{key}={value}" for key, value in gurobi_keys.items()) + "\n",
+            encoding="utf-8",
+        )
+        os.environ["GRB_LICENSE_FILE"] = str(license_path)
+
 
 @st.cache_resource(show_spinner=False)
 def get_graph():

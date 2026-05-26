@@ -16,52 +16,46 @@ st.set_page_config(page_title="Data Center ED Agent", page_icon="⚡", layout="w
 
 
 # ─────────────────────────────────────────
-#  Theme
+#  CSS — only custom HTML components touched
+#  Native Streamlit inputs/labels left alone
 # ─────────────────────────────────────────
 
-_LIGHT = {
-    "bg":           "#f0f2f6",
-    "card":         "#ffffff",
-    "text":         "#1f2937",
-    "subtext":      "#6b7280",
-    "shadow":       "rgba(0,0,0,0.08)",
-    "section_h2":   "#1e3a8a",
-    "section_line": "#eff6ff",
-    "tou_td_bg":    "#f8faff",
-    "tou_border":   "rgba(0,0,0,0.08)",
-    "input_border": "#c4c9d4",
-}
-
-_DARK = {
-    "bg":           "#0e1117",
-    "card":         "#1e2130",
-    "text":         "#f1f5f9",
-    "subtext":      "#94a3b8",
-    "shadow":       "rgba(0,0,0,0.35)",
-    "section_h2":   "#60a5fa",
-    "section_line": "rgba(96,165,250,0.2)",
-    "tou_td_bg":    "rgba(255,255,255,0.03)",
-    "tou_border":   "rgba(255,255,255,0.07)",
-    "input_border": "#4a5568",
-}
-
-
 def inject_css(dark: bool):
-    c = _DARK if dark else _LIGHT
+    if dark:
+        page_bg    = "#0e1117"
+        card_bg    = "#1e2130"
+        text       = "#f1f5f9"
+        subtext    = "#94a3b8"
+        shadow     = "rgba(0,0,0,0.3)"
+        h2_color   = "#60a5fa"
+        h2_border  = "rgba(96,165,250,0.2)"
+        tou_border = "rgba(255,255,255,0.07)"
+        tou_even   = "rgba(255,255,255,0.03)"
+    else:
+        page_bg    = "#f0f2f6"
+        card_bg    = "#ffffff"
+        text       = "#1f2937"
+        subtext    = "#6b7280"
+        shadow     = "rgba(0,0,0,0.08)"
+        h2_color   = "#1e3a8a"
+        h2_border  = "#eff6ff"
+        tou_border = "rgba(0,0,0,0.08)"
+        tou_even   = "#f8faff"
+
     st.markdown(
         f"""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
         html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; }}
 
+        /* Page background only — native Streamlit components untouched */
         .stApp,
         [data-testid="stAppViewContainer"],
         [data-testid="stHeader"] {{
-            background: {c['bg']} !important;
+            background: {page_bg} !important;
         }}
 
-        /* ── Dashboard header ── */
+        /* ── Dashboard header (always dark gradient) ── */
         .db-header {{
             background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #2563eb 100%);
             border-radius: 16px;
@@ -71,121 +65,98 @@ def inject_css(dark: bool):
             align-items: center;
             justify-content: space-between;
         }}
-        .db-header h1 {{ color:#fff; font-size:1.75rem; font-weight:700; margin:0; line-height:1.2; }}
-        .db-header p  {{ color:#93c5fd; font-size:.875rem; margin:.35rem 0 0; }}
+        .db-header h1 {{ color: #fff !important; font-size: 1.75rem; font-weight: 700; margin: 0; line-height: 1.2; }}
+        .db-header p  {{ color: #93c5fd !important; font-size: .875rem; margin: .35rem 0 0; }}
+        .db-header div {{ color: #93c5fd; font-size: .75rem; line-height: 1.8; }}
         .db-badge {{
-            display:inline-block;
-            background:rgba(255,255,255,0.12);
-            border:1px solid rgba(255,255,255,0.2);
-            border-radius:20px; padding:.3rem .9rem;
-            color:#bfdbfe; font-size:.78rem; font-weight:500;
-            margin:.25rem .2rem 0;
+            display: inline-block;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px; padding: .3rem .9rem;
+            color: #bfdbfe !important; font-size: .78rem; font-weight: 500;
+            margin: .25rem .2rem 0;
         }}
-        .db-badge.ok   {{ background:rgba(16,185,129,.2); border-color:rgba(16,185,129,.4); color:#6ee7b7; }}
-        .db-badge.warn {{ background:rgba(245,158,11,.2); border-color:rgba(245,158,11,.4); color:#fcd34d; }}
+        .db-badge.ok   {{ background: rgba(16,185,129,.2); border-color: rgba(16,185,129,.4); color: #6ee7b7 !important; }}
+        .db-badge.warn {{ background: rgba(245,158,11,.2);  border-color: rgba(245,158,11,.4);  color: #fcd34d !important; }}
 
         /* ── KPI cards ── */
         .kpi-card {{
-            flex:1; min-width:140px;
-            background:{c['card']};
-            border-radius:14px;
-            padding:1.15rem 1.35rem;
-            box-shadow:0 2px 8px {c['shadow']};
-            border-top:4px solid var(--accent);
-            position:relative; overflow:hidden;
+            flex: 1; min-width: 140px;
+            background: {card_bg};
+            border-radius: 14px;
+            padding: 1.15rem 1.35rem;
+            box-shadow: 0 2px 8px {shadow};
+            border-top: 4px solid var(--accent);
+            position: relative; overflow: hidden;
         }}
         .kpi-card::after {{
-            content:''; position:absolute; right:-14px; top:-14px;
-            width:72px; height:72px; border-radius:50%;
-            background:var(--accent); opacity:.08;
+            content: ''; position: absolute; right: -14px; top: -14px;
+            width: 72px; height: 72px; border-radius: 50%;
+            background: var(--accent); opacity: .08;
         }}
-        .kpi-label {{ font-size:.72rem; font-weight:600; color:{c['subtext']}; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.35rem; }}
-        .kpi-value {{ font-size:1.65rem; font-weight:700; color:{c['text']}; line-height:1; }}
-        .kpi-unit  {{ font-size:.75rem; font-weight:500; color:{c['subtext']}; margin-left:.25rem; }}
-        .kpi-sub   {{ font-size:.75rem; color:{c['subtext']}; margin-top:.3rem; }}
+        .kpi-label {{ font-size: .72rem; font-weight: 600; color: {subtext}; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .35rem; }}
+        .kpi-value {{ font-size: 1.65rem; font-weight: 700; color: {text}; line-height: 1; }}
+        .kpi-unit  {{ font-size: .75rem; font-weight: 500; color: {subtext}; margin-left: .25rem; }}
+        .kpi-sub   {{ font-size: .75rem; color: {subtext}; margin-top: .3rem; }}
 
         /* ── Section card ── */
         .section-card {{
-            background:{c['card']};
-            border-radius:14px;
-            padding:1.5rem 1.75rem;
-            margin-bottom:1.25rem;
-            box-shadow:0 1px 6px {c['shadow']};
+            background: {card_bg};
+            border-radius: 14px;
+            padding: 1.5rem 1.75rem;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 1px 6px {shadow};
         }}
         .section-card h2 {{
-            font-size:1rem; font-weight:700; color:{c['section_h2']};
-            margin:0 0 1rem; padding-bottom:.6rem;
-            border-bottom:2px solid {c['section_line']};
-            display:flex; align-items:center; gap:.5rem;
+            font-size: 1rem; font-weight: 700; color: {h2_color};
+            margin: 0 0 1rem; padding-bottom: .6rem;
+            border-bottom: 2px solid {h2_border};
+            display: flex; align-items: center; gap: .5rem;
         }}
 
         /* ── Report blocks ── */
         .report-block {{
-            border-left:4px solid #3b82f6;
-            border-radius:0 10px 10px 0;
-            padding:1rem 1.2rem;
-            margin-bottom:1rem;
+            border-left: 4px solid #3b82f6;
+            border-radius: 0 10px 10px 0;
+            padding: 1rem 1.2rem;
+            margin-bottom: 1rem;
         }}
-        .report-block h3 {{ font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin:0 0 .5rem; }}
-        .report-block p  {{ font-size:.875rem; color:{c['text']}; line-height:1.65; margin:0; }}
-        .report-block ul {{ font-size:.875rem; color:{c['text']}; padding-left:1.2rem; margin:0; line-height:1.7; }}
+        .report-block h3 {{ font-size: .85rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 .5rem; }}
+        .report-block p  {{ font-size: .875rem; color: {text}; line-height: 1.65; margin: 0; }}
+        .report-block ul {{ font-size: .875rem; color: {text}; padding-left: 1.2rem; margin: 0; line-height: 1.7; }}
 
-        .report-block.exec     {{ border-color:#3b82f6; background:rgba(59,130,246,.08); }}
-        .report-block.exec h3  {{ color:#60a5fa; }}
-        .report-block.config   {{ border-color:#8b5cf6; background:rgba(139,92,246,.08); }}
-        .report-block.config h3{{ color:#a78bfa; }}
-        .report-block.cost     {{ border-color:#10b981; background:rgba(16,185,129,.08); }}
-        .report-block.cost h3  {{ color:#34d399; }}
-        .report-block.dispatch {{ border-color:#f59e0b; background:rgba(245,158,11,.08); }}
-        .report-block.dispatch h3 {{ color:#fbbf24; }}
-        .report-block.tou      {{ border-color:#06b6d4; background:rgba(6,182,212,.08); }}
-        .report-block.tou h3   {{ color:#22d3ee; }}
-        .report-block.rec      {{ border-color:#ef4444; background:rgba(239,68,68,.08); }}
-        .report-block.rec h3   {{ color:#f87171; }}
-        .report-block.limit    {{ border-color:#9ca3af; background:rgba(156,163,175,.08); }}
-        .report-block.limit h3 {{ color:#9ca3af; }}
+        .report-block.exec     {{ border-color: #3b82f6; background: rgba(59,130,246,.08); }}
+        .report-block.exec h3  {{ color: #60a5fa; }}
+        .report-block.config   {{ border-color: #8b5cf6; background: rgba(139,92,246,.08); }}
+        .report-block.config h3{{ color: #a78bfa; }}
+        .report-block.cost     {{ border-color: #10b981; background: rgba(16,185,129,.08); }}
+        .report-block.cost h3  {{ color: #34d399; }}
+        .report-block.dispatch {{ border-color: #f59e0b; background: rgba(245,158,11,.08); }}
+        .report-block.dispatch h3 {{ color: #fbbf24; }}
+        .report-block.tou      {{ border-color: #06b6d4; background: rgba(6,182,212,.08); }}
+        .report-block.tou h3   {{ color: #22d3ee; }}
+        .report-block.rec      {{ border-color: #ef4444; background: rgba(239,68,68,.08); }}
+        .report-block.rec h3   {{ color: #f87171; }}
+        .report-block.limit    {{ border-color: #9ca3af; background: rgba(156,163,175,.08); }}
+        .report-block.limit h3 {{ color: #9ca3af; }}
 
         /* ── TOU table ── */
-        .tou-table {{ width:100%; border-collapse:collapse; font-size:.82rem; }}
-        .tou-table th {{ background:#1e3a8a; color:#fff; font-weight:600; padding:.55rem .75rem; text-align:center; }}
-        .tou-table td {{ padding:.5rem .75rem; text-align:center; color:{c['text']}; border-bottom:1px solid {c['tou_border']}; }}
-        .tou-table tr:nth-child(even) td {{ background:{c['tou_td_bg']}; }}
-        .badge-off {{ background:rgba(59,130,246,.15);  color:#60a5fa; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
-        .badge-mid {{ background:rgba(245,158,11,.15);  color:#fbbf24; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
-        .badge-on  {{ background:rgba(236,72,153,.15);  color:#f472b6; border-radius:20px; padding:2px 10px; font-weight:600; font-size:.75rem; }}
+        .tou-table {{ width: 100%; border-collapse: collapse; font-size: .82rem; }}
+        .tou-table th {{ background: #1e3a8a; color: #fff; font-weight: 600; padding: .55rem .75rem; text-align: center; }}
+        .tou-table td {{ padding: .5rem .75rem; text-align: center; color: {text}; border-bottom: 1px solid {tou_border}; }}
+        .tou-table tr:nth-child(even) td {{ background: {tou_even}; }}
+        .badge-off {{ background: rgba(59,130,246,.15);  color: #60a5fa; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .75rem; }}
+        .badge-mid {{ background: rgba(245,158,11,.15);  color: #fbbf24; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .75rem; }}
+        .badge-on  {{ background: rgba(236,72,153,.15);  color: #f472b6; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .75rem; }}
 
-        /* ── Widget labels & general text ── */
-        label p, label span,
-        [data-testid$="Label"] p,
-        [data-testid="stWidgetLabel"] p,
-        div[data-testid="stMarkdownContainer"] p,
-        div[data-testid="stMarkdownContainer"] li,
-        div[data-testid="stCaption"] p,
-        div[data-testid="stText"] p,
-        div[data-testid="stExpander"] summary p,
-        div[data-testid="stExpander"] summary span,
-        div[data-testid="stTabs"] button p {{
-            color: {c['text']} !important;
+        /* ── Minor Streamlit tweaks (non-invasive) ── */
+        div[data-testid="stTabs"] button[role="tab"] {{ font-weight: 600; font-size: .875rem; }}
+        div[data-testid="stButton"] button {{ border-radius: 10px; font-weight: 600; }}
+        div[data-testid="stButton"] button[kind="primary"],
+        div[data-testid="stDownloadButton"] button[kind="primary"] {{
+            color: #ffffff !important;
         }}
-
-        /* ── Input box borders (target baseweb container) ── */
-        div[data-baseweb="input"],
-        div[data-baseweb="textarea"] {{
-            border: 1px solid {c['input_border']} !important;
-            border-radius: 6px !important;
-            background: {c['card']} !important;
-            box-shadow: none !important;
-        }}
-        div[data-baseweb="input"] input,
-        div[data-baseweb="textarea"] textarea {{
-            background: transparent !important;
-            color: {c['text']} !important;
-        }}
-
-        /* ── Streamlit overrides ── */
-        div[data-testid="stTabs"] button[role="tab"] {{ font-weight:600; font-size:.875rem; }}
-        div[data-testid="stButton"] button {{ border-radius:10px; font-weight:600; }}
-        div[data-testid="stDataFrame"] {{ border-radius:10px; overflow:hidden; }}
+        div[data-testid="stDataFrame"] {{ border-radius: 10px; overflow: hidden; }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -214,7 +185,7 @@ def render_page_header(store_mode):
             <p>Scenario-based optimization for PV · GT · SMR · ESS microgrids</p>
             <div style="margin-top:.6rem">{badges}</div>
           </div>
-          <div style="text-align:right; color:#93c5fd; font-size:.75rem; line-height:1.8;">
+          <div style="text-align:right;">
             <div style="font-size:1.5rem">🏭</div>
             <div>LangGraph Agent</div>
             <div>Gurobi Optimizer</div>
@@ -406,11 +377,11 @@ def run_workflow(name, description, config, store):
 
 def render_kpi_cards(metrics):
     cards = [
-        {"label": "Total Cost",        "value": f"{metrics.get('total_cost', 0):,.0f}",    "unit": "KRW", "sub": "Optimized system cost", "accent": "#2563eb"},
-        {"label": "PV Renewable Share", "value": f"{metrics.get('pv_share', 0):.1f}",       "unit": "%",   "sub": "of total supply",       "accent": "#10b981"},
-        {"label": "Grid Import",        "value": f"{metrics.get('total_grid', 0):,.1f}",    "unit": "MWh", "sub": "External grid usage",   "accent": "#8b5cf6"},
-        {"label": "Generator Output",   "value": f"{metrics.get('total_generation', 0):,.1f}", "unit": "MWh", "sub": "GT + SMR combined",  "accent": "#f59e0b"},
-        {"label": "Peak Demand",        "value": f"{metrics.get('peak_supply', 0):,.1f}",   "unit": "MW",  "sub": f"@ {metrics.get('peak_time', '-')}", "accent": "#ef4444"},
+        {"label": "Total Cost",        "value": f"{metrics.get('total_cost', 0):,.0f}",       "unit": "KRW", "sub": "Optimized system cost", "accent": "#2563eb"},
+        {"label": "PV Renewable Share", "value": f"{metrics.get('pv_share', 0):.1f}",          "unit": "%",   "sub": "of total supply",       "accent": "#10b981"},
+        {"label": "Grid Import",        "value": f"{metrics.get('total_grid', 0):,.1f}",       "unit": "MWh", "sub": "External grid usage",   "accent": "#8b5cf6"},
+        {"label": "Generator Output",   "value": f"{metrics.get('total_generation', 0):,.1f}", "unit": "MWh", "sub": "GT + SMR combined",     "accent": "#f59e0b"},
+        {"label": "Peak Demand",        "value": f"{metrics.get('peak_supply', 0):,.1f}",      "unit": "MW",  "sub": f"@ {metrics.get('peak_time', '-')}", "accent": "#ef4444"},
     ]
     cols = st.columns(5)
     for col, card in zip(cols, cards):
@@ -458,13 +429,11 @@ def render_ai_report(report_text: str):
         chunk = chunk.strip()
         if not chunk:
             continue
-        heading_match = re.match(r'^(#{1,3})\s+(.*)', chunk)
-        if heading_match:
-            title = heading_match.group(2).strip()
-            body_raw = chunk[heading_match.end():].strip()
+        m = re.match(r'^(#{1,3})\s+(.*)', chunk)
+        if m:
+            title, body_raw = m.group(2).strip(), chunk[m.end():].strip()
         else:
-            title = "Summary"
-            body_raw = chunk
+            title, body_raw = "Summary", chunk
         cls, display_title = _classify_section(title)
         blocks_html += f'<div class="report-block {cls}"><h3>{display_title}</h3>{_body_to_html(body_raw)}</div>'
     st.markdown(blocks_html, unsafe_allow_html=True)
@@ -487,14 +456,12 @@ def _body_to_html(text: str) -> str:
             if not list_open:
                 html_parts.append("<ul>")
                 list_open = True
-            item = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line[2:].strip())
-            html_parts.append(f"<li>{item}</li>")
+            html_parts.append(f"<li>{re.sub(r'[*]{2}(.*?)[*]{2}', r'<strong>\1</strong>', line[2:].strip())}</li>")
         else:
             if list_open:
                 html_parts.append("</ul>")
                 list_open = False
-            para = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
-            html_parts.append(f"<p>{para}</p>")
+            html_parts.append(f"<p>{re.sub(r'[*]{2}(.*?)[*]{2}', r'<strong>\1</strong>', line)}</p>")
     if list_open:
         html_parts.append("</ul>")
     return "\n".join(html_parts)
@@ -506,14 +473,8 @@ def _body_to_html(text: str) -> str:
 
 def render_result(result):
     metrics = result.get("metrics") or {}
-    c = _DARK if st.session_state.get("dark_mode") else _LIGHT
 
-    st.markdown(
-        f'<div class="section-card" style="padding:1.25rem 1.75rem;">'
-        f'<h2 style="font-size:1rem;font-weight:700;color:{c["section_h2"]};margin:0 0 1rem;'
-        f'padding-bottom:.6rem;border-bottom:2px solid {c["section_line"]};">📈 Key Performance Indicators</h2>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="section-card" style="padding:1.25rem 1.75rem;"><h2>📈 Key Performance Indicators</h2>', unsafe_allow_html=True)
     render_kpi_cards(metrics)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -639,18 +600,18 @@ def main():
     if "dark_mode" not in st.session_state:
         st.session_state["dark_mode"] = False
 
-    # Theme toggle
-    toggle_col, _ = st.columns([1, 11])
-    with toggle_col:
-        dark_on = st.toggle("🌙 Dark mode", value=st.session_state["dark_mode"], key="theme_toggle")
-    if dark_on != st.session_state["dark_mode"]:
-        st.session_state["dark_mode"] = dark_on
-        st.rerun()
-
     inject_css(st.session_state["dark_mode"])
     configure_runtime_secrets()
     store, store_mode = get_supabase_store()
     render_page_header(store_mode)
+
+    # Theme toggle — right side of header area
+    _, btn_col = st.columns([11, 1])
+    with btn_col:
+        label = "🌙 Dark" if not st.session_state["dark_mode"] else "☀️ Light"
+        if st.button(label, use_container_width=True):
+            st.session_state["dark_mode"] = not st.session_state["dark_mode"]
+            st.rerun()
 
     run_tab, history_tab = st.tabs(["▶ Run", "🕘 History"])
 

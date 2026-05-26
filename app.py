@@ -67,6 +67,31 @@ def inject_css(dark: bool):
         div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]) {{
             color: {text} !important;
         }}
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]),
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):hover,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):focus,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):active,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]) p,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):hover p,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):focus p,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):active p,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]) span,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):hover span,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):focus span,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):active span {{
+            color: #111827 !important;
+        }}
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]) {{
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+        }}
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):hover,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):focus,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]):active {{
+            background-color: #f8fafc !important;
+            border-color: #94a3b8 !important;
+            box-shadow: none !important;
+        }}
         div[data-baseweb="select"] span,
         div[data-baseweb="select"] div {{
             color: {text} !important;

@@ -62,5 +62,8 @@ class SolverAgent:
             import traceback
             traceback.print_exc()
             state["solution"] = None
+            state["solution_output"] = None
+            state["solver_error"] = str(e)
+            raise RuntimeError(f"Gurobi/Pyomo solver failed: {e}") from e
 
         return state

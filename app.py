@@ -40,6 +40,7 @@ def configure_runtime_secrets():
             encoding="utf-8",
         )
         os.environ["GRB_LICENSE_FILE"] = str(license_path)
+        print(f"Gurobi WLS license configured at {license_path}")
 
 
 @st.cache_resource(show_spinner=False)
@@ -107,6 +108,8 @@ def run_workflow(name, description, config, store):
     result = get_graph().invoke(initial_state)
     solution_data = result.get("solution_output")
     params = result.get("params")
+    if not solution_data or not params:
+        raise RuntimeError(result.get("solver_error") or "Solver did not return a solution.")
     rows = solution_rows(solution_data, params)
     metrics = summary_metrics(solution_data, params)
 
@@ -114,6 +117,8 @@ def run_workflow(name, description, config, store):
         image_path = Path(tmp_dir) / "optimization_result.png"
         pdf_path = Path(tmp_dir) / "Final_Report.pdf"
         plot_results(solution_data, params, image_path)
+        if not image_path.exists():
+            raise RuntimeError("Graph image was not generated because the optimization result is empty.")
         create_pdf_report(result.get("explanation"), image_path, pdf_path)
         image_bytes = image_path.read_bytes()
         pdf_bytes = pdf_path.read_bytes()

@@ -149,14 +149,38 @@ def inject_css(dark: bool):
         .badge-mid {{ background: rgba(245,158,11,.15);  color: #fbbf24; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .75rem; }}
         .badge-on  {{ background: rgba(236,72,153,.15);  color: #f472b6; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .75rem; }}
 
-        /* ── Minor Streamlit tweaks (non-invasive) ── */
+        /* ── Minor Streamlit tweaks ── */
         div[data-testid="stTabs"] button[role="tab"] {{ font-weight: 600; font-size: .875rem; }}
         div[data-testid="stButton"] button {{ border-radius: 10px; font-weight: 600; }}
         div[data-testid="stButton"] button[kind="primary"],
-        div[data-testid="stDownloadButton"] button[kind="primary"] {{
-            color: #ffffff !important;
-        }}
+        div[data-testid="stDownloadButton"] button {{ color: #ffffff !important; }}
         div[data-testid="stDataFrame"] {{ border-radius: 10px; overflow: hidden; }}
+
+        {"" if not dark else f"""
+        /* ── Dark mode: force all Streamlit native text to light ── */
+        label, label p, label span,
+        div[data-testid="stWidgetLabel"] p,
+        div[data-testid="stWidgetLabel"] span,
+        div[data-testid="stMarkdownContainer"] p,
+        div[data-testid="stMarkdownContainer"] li,
+        div[data-testid="stMarkdownContainer"] span,
+        div[data-testid="stText"] p,
+        div[data-testid="stCaption"] p,
+        div[data-testid="stExpander"] summary p,
+        div[data-testid="stExpander"] summary span,
+        div[data-testid="stTabs"] button[role="tab"],
+        div[data-testid="stTabs"] button p,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]) {{
+            color: {text} !important;
+        }}
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stTextArea"] textarea,
+        div[data-baseweb="select"] span,
+        div[data-baseweb="select"] div {{
+            color: {text} !important;
+        }}
+        """}
         </style>
         """,
         unsafe_allow_html=True,

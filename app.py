@@ -189,12 +189,15 @@ def inject_css(dark: bool):
             border: 1px solid {input_bd} !important;
             border-radius: 8px !important;
             box-shadow: none !important;
+            outline: none !important;
         }}
         div[data-baseweb="input"],
         div[data-baseweb="textarea"] {{
             background-color: {input_bg} !important;
             border: 1px solid {input_bd} !important;
             border-radius: 8px !important;
+            box-shadow: none !important;
+            outline: none !important;
         }}
         div[data-baseweb="input"] input,
         div[data-baseweb="textarea"] textarea {{
@@ -205,12 +208,20 @@ def inject_css(dark: bool):
         div[data-testid="stNumberInput"] input:focus,
         div[data-testid="stTextArea"] textarea:focus {{
             border-color: #3b82f6 !important;
-            box-shadow: 0 0 0 1px #3b82f6 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }}
+        div[data-baseweb="input"]:focus-within,
+        div[data-baseweb="textarea"]:focus-within {{
+            border-color: #3b82f6 !important;
+            box-shadow: none !important;
+            outline: none !important;
         }}
         div[data-testid="stNumberInput"] button {{
             background-color: {input_bg} !important;
             color: {input_text} !important;
             border: 1px solid {input_bd} !important;
+            box-shadow: none !important;
         }}
         div[data-testid="stNumberInput"] svg {{
             fill: {input_text} !important;

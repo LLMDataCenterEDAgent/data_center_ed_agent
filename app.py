@@ -43,7 +43,6 @@ def configure_runtime_secrets():
         print(f"Gurobi WLS license configured at {license_path}")
 
 
-@st.cache_resource(show_spinner=False)
 def get_graph():
     return build_graph()
 
@@ -109,7 +108,14 @@ def run_workflow(name, description, config, store):
     solution_data = result.get("solution_output")
     params = result.get("params")
     if not solution_data or not params:
-        raise RuntimeError(result.get("solver_error") or "Solver did not return a solution.")
+        available_keys = ", ".join(sorted(result.keys()))
+        if result.get("solver_error"):
+            detail = result["solver_error"]
+        elif not params:
+            detail = "Formulation did not return EDParams."
+        else:
+            detail = "Solver did not return solution_output."
+        raise RuntimeError(f"{detail} State keys: {available_keys}")
     rows = solution_rows(solution_data, params)
     metrics = summary_metrics(solution_data, params)
 

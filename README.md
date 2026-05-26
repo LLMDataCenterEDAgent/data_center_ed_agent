@@ -6,9 +6,9 @@ Streamlit 기반 데이터센터 경제급전(ED) PoC 애플리케이션입니�
 
 | Name | Role | Responsibility |
 | --- | --- | --- |
-| Team Meber 0 | Project Lead | Streamlit app, Supabase integration, deployment |
-| Team Member 1 | Optimization | ED formulation, Gurobi solver validation |
-| Team Member 2 | Data / Analysis | Scenario data, report review, presentation |
+|  | Agent / Web Integration | Builds the LangGraph agent from the provided ED constraints and deploys the workflow as a Streamlit web app with Supabase, Gurobi, OpenAI reporting, PDF download, and History view |
+|  | Strategy / Optimization Contributor | Provides strategy-domain expertise, contributes to constraint design, and supports GitHub-based development updates |
+|  | Mechanical Engineering Contributor | Provides mechanical-engineering expertise and supports constraint formulation and technical validation |
 
 ## Features
 

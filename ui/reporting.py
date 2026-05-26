@@ -183,7 +183,7 @@ def plot_results(solution_data, params, output_path):
         fontsize=9,
     )
     fig.tight_layout(rect=[0.02, 0.06, 0.98, 0.96])
-    fig.savefig(output_path, dpi=180, facecolor=fig.get_facecolor())
+    fig.savefig(output_path, dpi=300, facecolor=fig.get_facecolor(), bbox_inches="tight", pad_inches=0.18)
     plt.close(fig)
     return str(output_path)
 
@@ -216,7 +216,7 @@ def create_pdf_report(explanation_text, image_path, output_path):
     pdf.cell(0, 10, "AI Data Center Energy Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     pdf.ln(5)
     if image_path and os.path.exists(image_path):
-        pdf.image(image_path, x=15, w=180)
+        pdf.image(image_path, x=12, w=186)
         pdf.ln(5)
 
     safe_text = _clean_markdown_text(explanation_text or "No report content.")

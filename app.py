@@ -344,7 +344,7 @@ def run_workflow(name, description, config, store):
         plot_results(solution_data, params, image_path)
         if not image_path.exists():
             raise RuntimeError("Graph image was not generated.")
-        create_pdf_report(result.get("explanation"), image_path, pdf_path)
+        create_pdf_report(result.get("explanation"), image_path, pdf_path, metrics=metrics)
         image_bytes = image_path.read_bytes()
         pdf_bytes = pdf_path.read_bytes()
 

@@ -8,6 +8,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 
 
 def solution_rows(solution_data, params):
@@ -90,12 +91,12 @@ def plot_results(solution_data, params, output_path):
             gen_data[gen_name].append(val.get(f"P_{gen_name}", val.get(gen_name, 0.0)))
 
     color_map = {
-        "SMR1": "#6f5aa7",
-        "PV": "#2f9e44",
-        "GT1": "#c92a2a",
-        "GT2": "#f08c00",
-        "ESS Dis": "#7c4d3a",
-        "Grid": "#1971c2",
+        "SMR1": "#4C5FD5",
+        "PV": "#35A853",
+        "GT1": "#E85D3F",
+        "GT2": "#F4A62A",
+        "ESS Dis": "#9B6A3B",
+        "Grid": "#2D8ACF",
     }
     sources = []
     if "SMR1" in gen_data:
@@ -113,27 +114,77 @@ def plot_results(solution_data, params, output_path):
     extra_sources.sort(key=lambda item: sum(item["data"]), reverse=True)
     sources.extend(extra_sources)
 
-    plt.figure(figsize=(12, 6))
-    plt.stackplot(
+    total_supply = [sum(source["data"][i] for source in sources) for i in range(T)]
+    net_load = list(params.demand_profile or [0] * T)
+    peak_idx = total_supply.index(max(total_supply)) if total_supply else 0
+
+    fig, ax = plt.subplots(figsize=(13.5, 6.8), facecolor="#F7F8FB")
+    ax.set_facecolor("#FFFFFF")
+    ax.stackplot(
         times,
         *[source["data"] for source in sources],
         labels=[source["label"] for source in sources],
         colors=[source["color"] for source in sources],
-        alpha=0.88,
+        alpha=0.92,
+        linewidth=0.35,
+        edgecolor="#FFFFFF",
     )
-    plt.title("Optimization Result: Energy Mix", fontsize=15, fontweight="bold")
-    plt.ylabel("Power (MW)")
-    plt.xlabel("Time")
+
+    ax.plot(times, net_load, color="#1F2937", linewidth=2.0, label="Net Load", alpha=0.92)
+    ax.plot(times, total_supply, color="#111827", linewidth=1.15, linestyle="--", label="Total Supply", alpha=0.65)
+
+    if total_supply:
+        ax.scatter([peak_idx], [total_supply[peak_idx]], color="#111827", s=42, zorder=5)
+        ax.annotate(
+            f"Peak {total_supply[peak_idx]:,.1f} MW",
+            xy=(peak_idx, total_supply[peak_idx]),
+            xytext=(10, 18),
+            textcoords="offset points",
+            fontsize=9,
+            color="#1F2937",
+            bbox={"boxstyle": "round,pad=0.35", "fc": "#FFFFFF", "ec": "#D6DAE5", "alpha": 0.96},
+            arrowprops={"arrowstyle": "->", "color": "#6B7280", "lw": 0.8},
+        )
+
+    ax.set_title("Optimized Energy Dispatch Mix", fontsize=16, fontweight="bold", loc="left", pad=16, color="#1F2937")
+    ax.text(
+        0,
+        1.015,
+        "Stacked generation schedule with net-load and total-supply overlays",
+        transform=ax.transAxes,
+        fontsize=9.5,
+        color="#667085",
+    )
+    ax.set_ylabel("Power (MW)", fontsize=10, color="#4B5563")
+    ax.set_xlabel("Dispatch interval", fontsize=10, color="#4B5563")
     tick_step = max(1, int(T / 8))
     ticks = range(0, T, tick_step)
-    plt.xticks(ticks=ticks, labels=[time_labels[i] for i in ticks], rotation=0)
-    plt.xlim(0, max(T - 1, 1))
-    handles, labels = plt.gca().get_legend_handles_labels()
-    plt.legend(handles[::-1], labels[::-1], loc="upper left", title="Source")
-    plt.grid(True, linestyle="--", alpha=0.35)
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=160)
-    plt.close()
+    ax.set_xticks(list(ticks))
+    ax.set_xticklabels([time_labels[i] for i in ticks], rotation=0, fontsize=9)
+    ax.set_xlim(0, max(T - 1, 1))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:,.0f}"))
+    ax.tick_params(axis="y", labelsize=9, colors="#4B5563")
+    ax.tick_params(axis="x", colors="#4B5563")
+    ax.grid(True, axis="y", linestyle="-", color="#E6E8EF", linewidth=0.8)
+    ax.grid(False, axis="x")
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#D6DAE5")
+    ax.spines["bottom"].set_color("#D6DAE5")
+
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(
+        handles[::-1],
+        labels[::-1],
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+        ncol=min(4, max(1, len(labels))),
+        frameon=False,
+        fontsize=9,
+    )
+    fig.tight_layout(rect=[0.02, 0.06, 0.98, 0.96])
+    fig.savefig(output_path, dpi=180, facecolor=fig.get_facecolor())
+    plt.close(fig)
     return str(output_path)
 
 

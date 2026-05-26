@@ -29,7 +29,7 @@ _LIGHT = {
     "section_line": "#eff6ff",
     "tou_td_bg":    "#f8faff",
     "tou_border":   "rgba(0,0,0,0.08)",
-    "input_border": "#cbd5e1",
+    "input_border": "#c4c9d4",
 }
 
 _DARK = {
@@ -42,7 +42,7 @@ _DARK = {
     "section_line": "rgba(96,165,250,0.2)",
     "tou_td_bg":    "rgba(255,255,255,0.03)",
     "tou_border":   "rgba(255,255,255,0.07)",
-    "input_border": "rgba(255,255,255,0.25)",
+    "input_border": "#4a5568",
 }
 
 
@@ -168,21 +168,18 @@ def inject_css(dark: bool):
             color: {c['text']} !important;
         }}
 
-        /* ── Input borders & backgrounds ── */
-        div[data-testid="stNumberInput"] input,
-        div[data-testid="stTextInput"] input,
-        div[data-testid="stTextArea"] textarea {{
+        /* ── Input box borders (target baseweb container) ── */
+        div[data-baseweb="input"],
+        div[data-baseweb="textarea"] {{
             border: 1px solid {c['input_border']} !important;
             border-radius: 6px !important;
             background: {c['card']} !important;
-            color: {c['text']} !important;
             box-shadow: none !important;
         }}
-        div[data-testid="stNumberInput"] > div,
-        div[data-testid="stTextInput"] > div {{
-            border: none !important;
+        div[data-baseweb="input"] input,
+        div[data-baseweb="textarea"] textarea {{
             background: transparent !important;
-            box-shadow: none !important;
+            color: {c['text']} !important;
         }}
 
         /* ── Streamlit overrides ── */
@@ -642,13 +639,13 @@ def main():
     if "dark_mode" not in st.session_state:
         st.session_state["dark_mode"] = False
 
-    # Theme toggle — top right
+    # Theme toggle
     toggle_col, _ = st.columns([1, 11])
     with toggle_col:
-        label = "🌙 Dark" if not st.session_state["dark_mode"] else "☀️ Light"
-        if st.button(label, key="theme_btn"):
-            st.session_state["dark_mode"] = not st.session_state["dark_mode"]
-            st.rerun()
+        dark_on = st.toggle("🌙 Dark mode", value=st.session_state["dark_mode"], key="theme_toggle")
+    if dark_on != st.session_state["dark_mode"]:
+        st.session_state["dark_mode"] = dark_on
+        st.rerun()
 
     inject_css(st.session_state["dark_mode"])
     configure_runtime_secrets()

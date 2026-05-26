@@ -14,6 +14,23 @@ from workflow.graph import build_graph
 st.set_page_config(page_title="Data Center ED Agent", page_icon="DC", layout="wide")
 
 
+def render_page_header(store_mode):
+    st.title("Data Center Energy Dispatch Agent")
+    st.caption("Scenario-based optimization for PV, GT, SMR, ESS data-center microgrids.")
+
+    status_cols = st.columns(3)
+    status_cols[0].success("Supabase Connected" if store_mode == "supabase" else "Local History Mode")
+    status_cols[1].success("Gurobi WLS Ready" if _has_gurobi_wls_secrets() else "Gurobi Secrets Missing")
+    status_cols[2].success("OpenAI Report Enabled" if st.secrets.get("OPENAI_API_KEY", "") else "Fallback Report Mode")
+
+
+def _has_gurobi_wls_secrets():
+    return all(
+        st.secrets.get(key, "")
+        for key in ("GRB_WLSACCESSID", "GRB_WLSSECRET", "GRB_LICENSEID")
+    )
+
+
 def get_supabase_store():
     url = st.secrets.get("SUPABASE_URL", "")
     key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", st.secrets.get("SUPABASE_ANON_KEY", ""))
@@ -51,33 +68,47 @@ def get_graph():
 
 
 def scenario_form():
-    name = st.text_input("Scenario name", value="Data center ED run")
-    description = st.text_area(
-        "Scenario description",
-        value="PV, SMR, GT, ESS를 활용해 15분 단위 데이터센터 경제급전을 수행한다.",
-        help="Supabase History에서 실행 목적을 구분하기 위한 메모입니다. 현재 최적화 계산값은 아래 숫자 입력값으로 결정됩니다.",
-        height=100,
-    )
-
-    time_col1, time_col2 = st.columns(2)
-    with time_col1:
+    st.markdown("#### Scenario")
+    scenario_col1, scenario_col2, scenario_col3 = st.columns([2, 1, 1])
+    with scenario_col1:
+        name = st.text_input("Scenario name", value="Data center ED run")
+    with scenario_col2:
         start_row = st.number_input("Start row", min_value=0, max_value=100000, value=0, step=1)
-    with time_col2:
+    with scenario_col3:
         time_steps = st.number_input("15-min steps", min_value=4, max_value=96, value=96, step=1)
 
-    st.subheader("Generator")
-    gen_col1, gen_col2, gen_col3 = st.columns(3)
+    with st.expander("Scenario memo", expanded=False):
+        description = st.text_area(
+            "Description",
+            value="PV, SMR, GT, ESS를 활용해 15분 단위 데이터센터 경제급전을 수행한다.",
+            help="History에서 실행 목적을 구분하기 위한 메모입니다. 최적화 계산값은 숫자 입력값으로 결정됩니다.",
+            height=90,
+        )
+
+    st.markdown("#### Generation Assets")
+    gen_col1, gen_col2, gen_col3, gen_col4 = st.columns(4)
     with gen_col1:
         gt_count = st.number_input("GT count", min_value=1, max_value=20, value=2, step=1)
-        gt_min = st.number_input("GT min MW", min_value=0.0, value=85.0, step=5.0)
-        gt_max = st.number_input("GT max MW", min_value=0.0, value=170.0, step=5.0)
     with gen_col2:
-        gt_cost = st.number_input("GT cost coefficient", min_value=0.0, value=0.03, step=0.001, format="%.3f")
-        smr_min = st.number_input("SMR min MW", min_value=0.0, value=91.0, step=1.0)
-        smr_max = st.number_input("SMR max MW", min_value=0.0, value=121.0, step=1.0)
+        gt_min = st.number_input("GT min MW", min_value=0.0, value=85.0, step=5.0)
     with gen_col3:
+        gt_max = st.number_input("GT max MW", min_value=0.0, value=170.0, step=5.0)
+    with gen_col4:
+        gt_cost = st.number_input("GT cost coefficient", min_value=0.0, value=0.03, step=0.001, format="%.3f")
+
+    smr_col1, smr_col2, smr_col3 = st.columns(3)
+    with smr_col1:
+        smr_min = st.number_input("SMR min MW", min_value=0.0, value=91.0, step=1.0)
+    with smr_col2:
+        smr_max = st.number_input("SMR max MW", min_value=0.0, value=121.0, step=1.0)
+    with smr_col3:
         smr_cost = st.number_input("SMR cost coefficient", min_value=0.0, value=0.002, step=0.001, format="%.3f")
+
+    st.markdown("#### Storage")
+    storage_col1, storage_col2 = st.columns(2)
+    with storage_col1:
         ess_capacity_mwh = st.number_input("ESS capacity MWh", min_value=0.0, value=160.0, step=10.0)
+    with storage_col2:
         ess_power_mw = st.number_input("ESS max power MW", min_value=0.0, value=40.0, step=5.0)
 
     config = {
@@ -173,13 +204,10 @@ def render_result(result):
     metrics = result.get("metrics") or {}
     render_metric_bar(metrics)
 
-    st.subheader("Result table")
-    st.dataframe(pd.DataFrame(result["rows"]), use_container_width=True, height=360)
-
-    st.subheader("Graph")
+    st.subheader("Energy Mix")
     st.image(result["image_bytes"], use_container_width=True)
 
-    st.subheader("Report")
+    st.subheader("AI Report")
     st.markdown(result["report"])
     st.download_button(
         "Download PDF",
@@ -188,6 +216,9 @@ def render_result(result):
         mime="application/pdf",
         use_container_width=True,
     )
+
+    st.subheader("Dispatch Table")
+    st.dataframe(pd.DataFrame(result["rows"]), use_container_width=True, height=360)
 
 
 def render_history(store):
@@ -228,17 +259,11 @@ def render_history(store):
 
 def main():
     configure_runtime_secrets()
-    st.title("Data Center Energy Dispatch Agent")
-
     store, store_mode = get_supabase_store()
-    if store_mode == "supabase":
-        st.success("Supabase 연결 설정이 감지되었습니다.")
-    else:
-        st.info("Supabase secrets가 없어 로컬 SQLite에 실행 이력을 저장합니다.")
+    render_page_header(store_mode)
 
     run_tab, history_tab = st.tabs(["Run", "History"])
     with run_tab:
-        st.subheader("Scenario setup")
         name, description, config = scenario_form()
 
         with st.expander("Current settings", expanded=False):
@@ -252,13 +277,17 @@ def main():
 
         if st.button("Run LangGraph agent", type="primary"):
             try:
-                with st.spinner("LangGraph agent 실행 중..."):
+                with st.status("Running optimization workflow...", expanded=True) as status:
+                    st.write("Saving scenario")
+                    st.write("Solving dispatch with Gurobi")
+                    st.write("Generating graph, report, and PDF")
                     st.session_state["latest_result"] = run_workflow(
                         name,
                         description,
                         config,
                         store,
                     )
+                    status.update(label="Workflow completed", state="complete", expanded=False)
                 st.success("실행이 완료되었습니다.")
             except Exception as exc:
                 if store.enabled:

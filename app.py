@@ -26,6 +26,9 @@ def inject_css(dark: bool):
         card_bg    = "#1e2130"
         text       = "#f1f5f9"
         subtext    = "#94a3b8"
+        input_bg   = "#111827"
+        input_text = "#f8fafc"
+        input_bd   = "rgba(148,163,184,0.55)"
         shadow     = "rgba(0,0,0,0.3)"
         h2_color   = "#60a5fa"
         h2_border  = "rgba(96,165,250,0.2)"
@@ -36,11 +39,39 @@ def inject_css(dark: bool):
         card_bg    = "#ffffff"
         text       = "#1f2937"
         subtext    = "#6b7280"
+        input_bg   = "#ffffff"
+        input_text = "#111827"
+        input_bd   = "rgba(100,116,139,0.55)"
         shadow     = "rgba(0,0,0,0.08)"
         h2_color   = "#1e3a8a"
         h2_border  = "#eff6ff"
         tou_border = "rgba(0,0,0,0.08)"
         tou_even   = "#f8faff"
+
+    dark_css = ""
+    if dark:
+        dark_css = f"""
+        /* Dark mode: force Streamlit native text to light */
+        label, label p, label span,
+        div[data-testid="stWidgetLabel"] p,
+        div[data-testid="stWidgetLabel"] span,
+        div[data-testid="stMarkdownContainer"] p,
+        div[data-testid="stMarkdownContainer"] li,
+        div[data-testid="stMarkdownContainer"] span,
+        div[data-testid="stText"] p,
+        div[data-testid="stCaption"] p,
+        div[data-testid="stExpander"] summary p,
+        div[data-testid="stExpander"] summary span,
+        div[data-testid="stTabs"] button[role="tab"],
+        div[data-testid="stTabs"] button p,
+        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]) {{
+            color: {text} !important;
+        }}
+        div[data-baseweb="select"] span,
+        div[data-baseweb="select"] div {{
+            color: {text} !important;
+        }}
+        """
 
     st.markdown(
         f"""
@@ -149,6 +180,42 @@ def inject_css(dark: bool):
         .badge-mid {{ background: rgba(245,158,11,.15);  color: #fbbf24; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .75rem; }}
         .badge-on  {{ background: rgba(236,72,153,.15);  color: #f472b6; border-radius: 20px; padding: 2px 10px; font-weight: 600; font-size: .75rem; }}
 
+        /* ── Native input contrast and borders ── */
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stTextArea"] textarea {{
+            background-color: {input_bg} !important;
+            color: {input_text} !important;
+            border: 1px solid {input_bd} !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }}
+        div[data-baseweb="input"],
+        div[data-baseweb="textarea"] {{
+            background-color: {input_bg} !important;
+            border: 1px solid {input_bd} !important;
+            border-radius: 8px !important;
+        }}
+        div[data-baseweb="input"] input,
+        div[data-baseweb="textarea"] textarea {{
+            color: {input_text} !important;
+            -webkit-text-fill-color: {input_text} !important;
+        }}
+        div[data-testid="stTextInput"] input:focus,
+        div[data-testid="stNumberInput"] input:focus,
+        div[data-testid="stTextArea"] textarea:focus {{
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 1px #3b82f6 !important;
+        }}
+        div[data-testid="stNumberInput"] button {{
+            background-color: {input_bg} !important;
+            color: {input_text} !important;
+            border: 1px solid {input_bd} !important;
+        }}
+        div[data-testid="stNumberInput"] svg {{
+            fill: {input_text} !important;
+        }}
+
         /* ── Minor Streamlit tweaks ── */
         div[data-testid="stTabs"] button[role="tab"] {{ font-weight: 600; font-size: .875rem; }}
         div[data-testid="stButton"] button {{ border-radius: 10px; font-weight: 600; }}
@@ -156,31 +223,7 @@ def inject_css(dark: bool):
         div[data-testid="stDownloadButton"] button {{ color: #ffffff !important; }}
         div[data-testid="stDataFrame"] {{ border-radius: 10px; overflow: hidden; }}
 
-        {"" if not dark else f"""
-        /* ── Dark mode: force all Streamlit native text to light ── */
-        label, label p, label span,
-        div[data-testid="stWidgetLabel"] p,
-        div[data-testid="stWidgetLabel"] span,
-        div[data-testid="stMarkdownContainer"] p,
-        div[data-testid="stMarkdownContainer"] li,
-        div[data-testid="stMarkdownContainer"] span,
-        div[data-testid="stText"] p,
-        div[data-testid="stCaption"] p,
-        div[data-testid="stExpander"] summary p,
-        div[data-testid="stExpander"] summary span,
-        div[data-testid="stTabs"] button[role="tab"],
-        div[data-testid="stTabs"] button p,
-        div[data-testid="stButton"]:not([data-testid="stDownloadButton"]) button:not([kind="primary"]) {{
-            color: {text} !important;
-        }}
-        div[data-testid="stNumberInput"] input,
-        div[data-testid="stTextInput"] input,
-        div[data-testid="stTextArea"] textarea,
-        div[data-baseweb="select"] span,
-        div[data-baseweb="select"] div {{
-            color: {text} !important;
-        }}
-        """}
+        {dark_css}
         </style>
         """,
         unsafe_allow_html=True,
@@ -480,12 +523,14 @@ def _body_to_html(text: str) -> str:
             if not list_open:
                 html_parts.append("<ul>")
                 list_open = True
-            html_parts.append(f"<li>{re.sub(r'[*]{2}(.*?)[*]{2}', r'<strong>\1</strong>', line[2:].strip())}</li>")
+            bullet_text = re.sub(r"[*]{2}(.*?)[*]{2}", r"<strong>\1</strong>", line[2:].strip())
+            html_parts.append(f"<li>{bullet_text}</li>")
         else:
             if list_open:
                 html_parts.append("</ul>")
                 list_open = False
-            html_parts.append(f"<p>{re.sub(r'[*]{2}(.*?)[*]{2}', r'<strong>\1</strong>', line)}</p>")
+            paragraph_text = re.sub(r"[*]{2}(.*?)[*]{2}", r"<strong>\1</strong>", line)
+            html_parts.append(f"<p>{paragraph_text}</p>")
     if list_open:
         html_parts.append("</ul>")
     return "\n".join(html_parts)

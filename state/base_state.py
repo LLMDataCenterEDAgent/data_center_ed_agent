@@ -6,6 +6,7 @@ from typing import TypedDict, Optional, Any
 class AgentState(TypedDict, total=False):
     # 사용자 입력
     problem_text: str
+    scenario_config: Optional[dict]
 
     # Parsing 결과
     parsed_data: Optional[dict]

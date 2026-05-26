@@ -7,6 +7,7 @@ from state.base_state import AgentState
 class ParsingAgent:
     def run(self, state: AgentState) -> AgentState:
         print("\n--- Parsing Agent Started (Syncing Data) ---")
+        scenario_config = state.get("scenario_config") or {}
         
         # 파일 경로
         load_path = "datacenter_load/dc_profile_15min_ED.csv"
@@ -45,9 +46,12 @@ class ParsingAgent:
             )
             df_merged.sort_values('timestamp', inplace=True)
             
-            # 24시간 제한
-            if len(df_merged) > 96:
-                df_merged = df_merged.iloc[:96]
+            # Streamlit에서 선택한 구간 반영
+            start_row = int(scenario_config.get("start_row", 0) or 0)
+            time_steps = int(scenario_config.get("time_steps", 96) or 96)
+            start_row = max(0, min(start_row, max(len(df_merged) - 1, 0)))
+            time_steps = max(1, min(time_steps, len(df_merged) - start_row))
+            df_merged = df_merged.iloc[start_row:start_row + time_steps]
                 
             print(f">> Data synced! Start: {df_merged['timestamp'].iloc[0]}, Count: {len(df_merged)}")
             

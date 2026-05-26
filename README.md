@@ -6,7 +6,7 @@ Streamlit 기반 데이터센터 경제급전(ED) PoC 애플리케이션입니�
 
 | Name | Role | Responsibility |
 | --- | --- | --- |
-| 김시은 | Project Lead | Streamlit app, Supabase integration, deployment |
+| Team Meber 0 | Project Lead | Streamlit app, Supabase integration, deployment |
 | Team Member 1 | Optimization | ED formulation, Gurobi solver validation |
 | Team Member 2 | Data / Analysis | Scenario data, report review, presentation |
 

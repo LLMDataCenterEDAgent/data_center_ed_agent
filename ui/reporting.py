@@ -47,12 +47,13 @@ def summary_metrics(solution_data, params):
     if not rows:
         return {}
 
+    interval_hours = float(getattr(params, "interval_hours", 0.25) or 0.25)
     gen_cols = [key for key in rows[0] if key.endswith("_mw") and key.startswith(("GT", "SMR"))]
-    total_grid = sum(row["grid_mw"] for row in rows)
-    total_pv = sum(row["pv_mw"] for row in rows)
-    total_ess_dis = sum(row["ess_discharge_mw"] for row in rows)
-    total_ess_chg = sum(row["ess_charge_mw"] for row in rows)
-    total_gen = sum(sum(row.get(col, 0.0) for col in gen_cols) for row in rows)
+    total_grid = sum(row["grid_mw"] for row in rows) * interval_hours
+    total_pv = sum(row["pv_mw"] for row in rows) * interval_hours
+    total_ess_dis = sum(row["ess_discharge_mw"] for row in rows) * interval_hours
+    total_ess_chg = sum(row["ess_charge_mw"] for row in rows) * interval_hours
+    total_gen = sum(sum(row.get(col, 0.0) for col in gen_cols) for row in rows) * interval_hours
     total_supply = total_grid + total_pv + total_gen + total_ess_dis
     peak_row = max(rows, key=lambda row: row["managed_supply_mw"] + row["pv_mw"])
     return {
@@ -83,7 +84,11 @@ def plot_results(solution_data, params, output_path):
     if params.timestamps and len(params.timestamps) == T:
         time_labels = [str(t).split(" ")[-1] for t in params.timestamps]
     else:
-        time_labels = [f"{int(t / 4):02d}:{int(t % 4) * 15:02d}" for t in times]
+        interval_minutes = int(getattr(params, "interval_minutes", 15) or 15)
+        time_labels = [
+            f"{int((t * interval_minutes) / 60) % 24:02d}:{int((t * interval_minutes) % 60):02d}"
+            for t in times
+        ]
 
     p_grid, p_pv, p_ess_dis = [], [], []
     gen_data = {g: [] for g in params.generators}

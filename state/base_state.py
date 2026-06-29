@@ -22,3 +22,10 @@ class AgentState(TypedDict, total=False):
 
     # Explanation Agent 결과
     explanation: Optional[str]
+
+    # Validation / self-correction loop
+    solver_error: Optional[str]
+    solver_diagnostic: Optional[str]
+    validation_errors: Optional[list]
+    correction_attempts: int
+    max_correction_attempts: int

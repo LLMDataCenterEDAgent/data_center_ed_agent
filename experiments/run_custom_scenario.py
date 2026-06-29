@@ -7,7 +7,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from state.schemas import EDParams, GeneratorSpec, StorageSpec, RenewableSpec
 from core.dynamic_solver import solve_dynamic_ed
-# from agents.explanation_agent import explain_solution
 
 def run_custom_scenario():
     print(">>> Running Custom Scenario (NO PV CURTAILMENT): 400MW Load + PV must-take + 40MW/160MWh ESS")

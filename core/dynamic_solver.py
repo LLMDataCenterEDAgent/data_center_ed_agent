@@ -1,11 +1,14 @@
 # core/dynamic_solver.py
 
 import pyomo.environ as pyo
+from pyomo.opt import TerminationCondition
+
 from state.schemas import EDParams, EDSolution
 
 def solve_dynamic_ed(params: EDParams) -> EDSolution:
     m = pyo.ConcreteModel()
     T_len = params.time_steps
+    dt = float(getattr(params, "interval_hours", 0.25) or 0.25)
     m.T = pyo.RangeSet(0, T_len - 1)
     
     gen_names = list(params.generators.keys())
@@ -17,7 +20,11 @@ def solve_dynamic_ed(params: EDParams) -> EDSolution:
         m.P_dis = pyo.Var(ess_names, m.T, domain=pyo.NonNegativeReals)
         m.SOC = pyo.Var(ess_names, m.T, domain=pyo.NonNegativeReals)
 
-    m.P_grid_import = pyo.Var(m.T, domain=pyo.NonNegativeReals) 
+    grid_import_limit = getattr(params, "grid_import_limit_mw", None)
+    if grid_import_limit is None:
+        m.P_grid_import = pyo.Var(m.T, domain=pyo.NonNegativeReals)
+    else:
+        m.P_grid_import = pyo.Var(m.T, domain=pyo.NonNegativeReals, bounds=(0.0, float(grid_import_limit)))
     m.P_grid_export = pyo.Var(m.T, domain=pyo.NonNegativeReals)
 
     # Constraints
@@ -41,7 +48,6 @@ def solve_dynamic_ed(params: EDParams) -> EDSolution:
     m.Ramp = pyo.Constraint(gen_names, m.T, rule=ramp_rule)
     
     if ess_names:
-        dt = 0.25
         def soc_rule(model, e, t):
             spec = params.ess[e]
             prev = model.SOC[e, t-1] if t > 0 else spec.initial_soc * spec.capacity_mwh
@@ -87,6 +93,10 @@ def solve_dynamic_ed(params: EDParams) -> EDSolution:
     
     solver = pyo.SolverFactory('gurobi')
     res = solver.solve(m, tee=True)
+
+    termination = res.solver.termination_condition
+    if termination != TerminationCondition.optimal:
+        raise RuntimeError(f"Solver termination condition: {termination}")
     
     sol = EDSolution()
     sol.cost = pyo.value(m.Obj)

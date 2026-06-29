@@ -48,6 +48,8 @@ def build_report_metrics(solution_data, params):
     gen_names = list(params.generators.keys())
     ess_names = list(params.ess.keys()) if params.ess else []
     time_indices = range(params.time_steps)
+    interval_hours = float(getattr(params, "interval_hours", 0.25) or 0.25)
+    horizon_hours = params.time_steps * interval_hours
 
     gt_names = [g for g in gen_names if classify_generator(g) == "GT"]
     smr_names = [g for g in gen_names if classify_generator(g) == "SMR"]
@@ -60,16 +62,26 @@ def build_report_metrics(solution_data, params):
     gt_cost = 0.0
     total_pv_energy_mwh = 0.0
     total_ess_discharge_mwh = 0.0
+    total_smr_mw_sum = 0.0
+    total_gt_mw_sum = 0.0
+    total_pv_mw_sum = 0.0
+    total_ess_mw_sum = 0.0
 
     for t in time_indices:
         row = solution_data.get(t, {})
-        total_pv_energy_mwh += row.get("P_PV", 0.0) * 0.25
+        pv_mw = row.get("P_PV", 0.0)
+        total_pv_mw_sum += pv_mw
+        total_pv_energy_mwh += pv_mw * interval_hours
         for g in gt_names:
+            total_gt_mw_sum += row.get(f"P_{g}", 0.0)
             gt_cost += calc_generator_cost(params.generators[g], row.get(f"P_{g}", 0.0))
         for g in smr_names:
+            total_smr_mw_sum += row.get(f"P_{g}", 0.0)
             smr_cost += calc_generator_cost(params.generators[g], row.get(f"P_{g}", 0.0))
         for e in ess_names:
-            total_ess_discharge_mwh += row.get(f"P_dis_{e}", 0.0) * 0.25
+            ess_mw = row.get(f"P_dis_{e}", 0.0)
+            total_ess_mw_sum += ess_mw
+            total_ess_discharge_mwh += ess_mw * interval_hours
 
     prices = params.grid_price_profile if params.grid_price_profile else [0.0] * params.time_steps
     unique_prices = sorted(set(prices))
@@ -115,14 +127,12 @@ def build_report_metrics(solution_data, params):
             "ess_soc_mwh": stat["SOC"] / stat["count"] if ess_names else 0.0,
         })
 
-    total_smr_avg = sum(item["smr_mw"] for item in tou_summary) / len(tou_summary) if tou_summary else 0.0
-    total_gt_avg = sum(item["gt_mw"] for item in tou_summary) / len(tou_summary) if tou_summary else 0.0
-    total_pv_avg = sum(item["pv_mw"] for item in tou_summary) / len(tou_summary) if tou_summary else 0.0
-    total_ess_avg = sum(item["ess_mw"] for item in tou_summary) / len(tou_summary) if tou_summary else 0.0
+    total_smr_avg = total_smr_mw_sum / params.time_steps if params.time_steps else 0.0
+    total_gt_avg = total_gt_mw_sum / params.time_steps if params.time_steps else 0.0
+    total_pv_avg = total_pv_mw_sum / params.time_steps if params.time_steps else 0.0
+    total_ess_avg = total_ess_mw_sum / params.time_steps if params.time_steps else 0.0
 
-    total_gt_energy_mwh = total_gt_avg * 24.0
-    total_smr_energy_mwh = total_smr_avg * 24.0
-    analysis_hours = 24.0
+    analysis_hours = horizon_hours
 
     baseload_ratio = (smr_cost / total_cost * 100.0) if total_cost else 0.0
     variable_ratio = (variable_cost / total_cost * 100.0) if total_cost else 0.0
@@ -161,6 +171,8 @@ def build_report_metrics(solution_data, params):
         "pv_capacity_factor": pv_capacity_factor,
         "ess_capacity_factor": ess_capacity_factor,
         "tou_summary": tou_summary,
+        "analysis_hours": analysis_hours,
+        "interval_minutes": int(getattr(params, "interval_minutes", 15) or 15),
     }
 
 
@@ -231,7 +243,8 @@ def render_structured_report(pdf, font_name, metrics, explanation_text):
     executive_summary_1 = (
         f"This report evaluates a microgrid portfolio composed of PV {metrics['pv_capacity_mw']:.1f} MW, "
         f"GT {metrics['gt_capacity_mw']:.1f} MW, SMR {metrics['smr_capacity_mw']:.1f} MW, and ESS "
-        f"{metrics['ess_power_mw']:.1f} MW / {metrics['ess_capacity_mwh']:.1f} MWh over a 24-hour horizon. "
+        f"{metrics['ess_power_mw']:.1f} MW / {metrics['ess_capacity_mwh']:.1f} MWh over a "
+        f"{metrics['analysis_hours']:.1f}-hour horizon at {metrics['interval_minutes']}-minute resolution. "
         f"The optimization outcome indicates a portfolio centered on stable nuclear baseload, flexible gas support, "
         f"daytime renewable injection, and targeted storage discharge during expensive periods."
     )
@@ -285,7 +298,7 @@ def render_structured_report(pdf, font_name, metrics, explanation_text):
 
     add_report_line(pdf, font_name, "4. Dispatch Strategy Analysis by Generation Source", bold=True, size=12)
     add_report_line(pdf, font_name, dispatch_intro, indent=4)
-    add_report_line(pdf, font_name, f"- SMR: Average output {metrics['smr_avg_mw']:.1f} MW with capacity factor {metrics['smr_capacity_factor']:.1f}% over 24 hours. It functioned as the dominant baseload source with high stability and low short-term variability.", indent=6)
+    add_report_line(pdf, font_name, f"- SMR: Average output {metrics['smr_avg_mw']:.1f} MW with capacity factor {metrics['smr_capacity_factor']:.1f}% over {metrics['analysis_hours']:.1f} hours. It functioned as the dominant baseload source with high stability and low short-term variability.", indent=6)
     add_report_line(pdf, font_name, f"- GT: Average output {metrics['gt_avg_mw']:.1f} MW with capacity factor {metrics['gt_capacity_factor']:.1f}%. GT served as the flexible thermal resource, absorbing residual demand and supporting peak conditions.", indent=6)
     add_report_line(pdf, font_name, f"- PV: Average output {metrics['pv_avg_mw']:.1f} MW, total energy {metrics['pv_energy_mwh']:.1f} MWh, and capacity factor {metrics['pv_capacity_factor']:.1f}%. PV mainly contributed during daytime high-value periods, improving renewable penetration and lowering marginal energy cost.", indent=6)
     add_report_line(pdf, font_name, f"- ESS: Average discharge {metrics['ess_avg_mw']:.1f} MW, total discharge {metrics['ess_energy_mwh']:.1f} MWh, and discharge-based capacity factor {metrics['ess_capacity_factor']:.1f}%. ESS was used selectively for peak shaving and energy arbitrage, indicating a control strategy focused on value capture rather than continuous cycling.", indent=6, gap_after=3)
@@ -305,8 +318,8 @@ def render_structured_report(pdf, font_name, metrics, explanation_text):
     add_report_line(pdf, font_name, "- Recommendation 4: evaluate scenario-based TOU sensitivity. Testing alternative tariff conditions and fuel cost assumptions would improve confidence in operating policy and investment prioritization.", indent=6, gap_after=3)
 
     add_report_line(pdf, font_name, "7. Data Limitations and Assumptions", bold=True, size=12)
-    add_report_line(pdf, font_name, "- The report assumes a 24-hour analysis horizon and interprets all average outputs over that period.", indent=6)
-    add_report_line(pdf, font_name, "- Capacity factor values are calculated from average output or total discharge divided by rated capacity over 24 hours.", indent=6)
+    add_report_line(pdf, font_name, f"- The report assumes a {metrics['analysis_hours']:.1f}-hour analysis horizon and interprets all average outputs over that period.", indent=6)
+    add_report_line(pdf, font_name, f"- Capacity factor values are calculated from average output or total discharge divided by rated capacity over {metrics['analysis_hours']:.1f} hours.", indent=6)
     add_report_line(pdf, font_name, "- Baseload generation cost is interpreted from the modeled low-variability generation block, while total cost and variable cost are taken directly from optimization output.", indent=6)
     add_report_line(pdf, font_name, "- External constraints such as maintenance schedules, reserve requirements, emissions limits, and forecast uncertainty are not explicitly represented in this narrative unless reflected in the optimization result.", indent=6)
     if explanation_lines:
@@ -324,7 +337,11 @@ def plot_results(solution_data, params):
     if params.timestamps and len(params.timestamps) == T:
         time_labels = [t.split(" ")[-1] for t in params.timestamps]
     else:
-        time_labels = [f"{int(t/4):02d}:{int(t%4)*15:02d}" for t in times]
+        interval_minutes = int(getattr(params, "interval_minutes", 15) or 15)
+        time_labels = [
+            f"{int((t * interval_minutes) / 60) % 24:02d}:{int((t * interval_minutes) % 60):02d}"
+            for t in times
+        ]
 
     p_grid, p_pv = [], []
     gen_names = list(params.generators.keys())

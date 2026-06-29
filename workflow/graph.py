@@ -10,6 +10,16 @@ from agents.formulation_agent import FormulationAgent
 from agents.solver_agent import SolverAgent
 from agents.explanation_agent_v2 import ExplanationAgent
 
+
+def route_after_solve(state: AgentState):
+    if state.get("solver_error"):
+        attempts = int(state.get("correction_attempts", 0) or 0)
+        max_attempts = int(state.get("max_correction_attempts", 2) or 2)
+        if attempts < max_attempts:
+            return "retry"
+        return "end"
+    return "explain"
+
 def build_graph():
     # 1. 그래프 초기화
     # [확인] StateGraph 안에 AgentState를 넣어야 합니다.
@@ -31,7 +41,15 @@ def build_graph():
     workflow.set_entry_point("parse")
     workflow.add_edge("parse", "formulate")
     workflow.add_edge("formulate", "solve")
-    workflow.add_edge("solve", "explain")
+    workflow.add_conditional_edges(
+        "solve",
+        route_after_solve,
+        {
+            "retry": "formulate",
+            "explain": "explain",
+            "end": END,
+        },
+    )
     workflow.add_edge("explain", END)
 
     return workflow.compile()

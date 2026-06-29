@@ -1,6 +1,8 @@
 import json
 import os
+import re
 from datetime import datetime, timezone
+from html import unescape
 from typing import Any, Optional
 
 import requests
@@ -72,17 +74,20 @@ class SupabaseStore:
         if prefer:
             headers["Prefer"] = prefer
 
-        response = requests.request(
-            method,
-            f"{self.url}/rest/v1/{path}",
-            headers=headers,
-            data=json.dumps(payload) if payload is not None else None,
-            timeout=30,
-        )
+        try:
+            response = requests.request(
+                method,
+                f"{self.url}/rest/v1/{path}",
+                headers=headers,
+                data=json.dumps(payload) if payload is not None else None,
+                timeout=30,
+            )
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Supabase request failed: {exc}") from exc
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:
-            raise RuntimeError(f"Supabase request failed: {response.status_code} {response.text}") from exc
+            raise RuntimeError(_format_error(response)) from exc
         if not response.text:
             return None
         data = response.json()
@@ -93,3 +98,18 @@ class SupabaseStore:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _format_error(response: requests.Response) -> str:
+    if response.status_code == 521:
+        return (
+            "Supabase request failed: 521 Web server is down. "
+            "Supabase 프로젝트 endpoint가 연결을 받지 않습니다. "
+            "프로젝트가 아직 paused/resuming 상태이거나 Supabase 장애 영향을 받는지 확인하세요."
+        )
+
+    body = unescape(re.sub(r"<[^>]+>", " ", response.text or ""))
+    body = " ".join(body.split())
+    if len(body) > 500:
+        body = f"{body[:500]}..."
+    return f"Supabase request failed: {response.status_code} {body}"

@@ -1,9 +1,10 @@
 from openai import OpenAI
 
 from state.base_state import AgentState
+from utils.runtime_secrets import load_streamlit_secrets_into_env
 
 
-client = OpenAI()
+client = None
 
 
 SYSTEM_PROMPT = """
@@ -38,6 +39,7 @@ def calc_generation_cost(spec, power):
 
 class ExplanationAgent:
     def run(self, state: AgentState) -> AgentState:
+        global client
         print("\n--- Explanation Agent Started (LLM Technical Report Mode) ---")
 
         sol = state.get("solution_output")
@@ -48,6 +50,10 @@ class ExplanationAgent:
             return state
 
         try:
+            if client is None:
+                load_streamlit_secrets_into_env()
+                client = OpenAI()
+
             total_cost = float(sol.get("Total_Cost", 0.0))
             fixed_base_cost = float(getattr(params, "base_rate", 0.0) or 0.0)
             variable_cost = total_cost - fixed_base_cost
@@ -55,6 +61,9 @@ class ExplanationAgent:
             gen_names = list(params.generators.keys())
             ess_names = list(params.ess.keys()) if params.ess else []
             time_steps = params.time_steps
+            interval_hours = float(getattr(params, "interval_hours", 0.25) or 0.25)
+            interval_minutes = int(getattr(params, "interval_minutes", 15) or 15)
+            horizon_hours = time_steps * interval_hours
 
             gt_names = [g for g in gen_names if "GT" in g.upper() or "GAS" in g.upper()]
             smr_names = [g for g in gen_names if "SMR" in g.upper() or "NUC" in g.upper()]
@@ -120,15 +129,15 @@ class ExplanationAgent:
             pv_avg = pv_total / time_steps if time_steps else 0.0
             ess_avg = ess_total / time_steps if time_steps else 0.0
 
-            pv_energy = pv_total * 0.25
-            ess_energy = ess_total * 0.25
+            pv_energy = pv_total * interval_hours
+            ess_energy = ess_total * interval_hours
 
             baseload_ratio = (smr_cost / total_cost * 100.0) if total_cost else 0.0
             variable_ratio = (variable_cost / total_cost * 100.0) if total_cost else 0.0
             gt_cf = (gt_avg / gt_capacity * 100.0) if gt_capacity else 0.0
             smr_cf = (smr_avg / smr_capacity * 100.0) if smr_capacity else 0.0
-            pv_cf = (pv_energy / (pv_capacity * 24.0) * 100.0) if pv_capacity else 0.0
-            ess_cf = (ess_energy / (ess_power * 24.0) * 100.0) if ess_power else 0.0
+            pv_cf = (pv_energy / (pv_capacity * horizon_hours) * 100.0) if pv_capacity and horizon_hours else 0.0
+            ess_cf = (ess_energy / (ess_power * horizon_hours) * 100.0) if ess_power and horizon_hours else 0.0
 
             tou_lines = []
             for label in ["Off-Peak", "Mid-Peak", "On-Peak", "Flat"]:
@@ -169,7 +178,8 @@ class ExplanationAgent:
 - Baseload cost ratio: {baseload_ratio:.1f}%
 - Variable cost ratio: {variable_ratio:.1f}%
 - Fixed base cost included in total cost: {fixed_base_cost:,.0f} KRW
-- Analysis horizon: 24 hours
+- Dispatch interval: {interval_minutes} minutes
+- Analysis horizon: {horizon_hours:.1f} hours
 - Use only the values above. If a value is missing, state it as a limitation.
 """
 

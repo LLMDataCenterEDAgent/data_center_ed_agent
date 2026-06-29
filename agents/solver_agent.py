@@ -13,6 +13,8 @@ class SolverAgent:
             return state
 
         try:
+            state["solver_error"] = None
+            state["solver_diagnostic"] = None
             print(f">>> Solving Dynamic ED for {len(params.generators)} gens...")
             sol = solve_dynamic_ed(params)
             
@@ -63,7 +65,37 @@ class SolverAgent:
             traceback.print_exc()
             state["solution"] = None
             state["solution_output"] = None
-            state["solver_error"] = str(e)
-            raise RuntimeError(f"Gurobi/Pyomo solver failed: {e}") from e
+            diagnostic = self._capacity_diagnostic(params)
+            state["solver_diagnostic"] = diagnostic
+            state["solver_error"] = f"{e} | {diagnostic}" if diagnostic else str(e)
 
         return state
+
+    def _capacity_diagnostic(self, params):
+        if not params or not getattr(params, "demand_profile", None):
+            return ""
+
+        peak_net_demand = max(params.demand_profile)
+        gen_capacity = sum(spec.p_max for spec in params.generators.values())
+        ess_power = sum(spec.max_power_mw for spec in params.ess.values()) if params.ess else 0.0
+        grid_limit = getattr(params, "grid_import_limit_mw", None)
+        grid_capacity = float("inf") if grid_limit is None else float(grid_limit)
+        available_supply = gen_capacity + ess_power + grid_capacity
+
+        if available_supply == float("inf"):
+            return (
+                f"Peak net demand {peak_net_demand:.1f} MW; onsite supply "
+                f"{gen_capacity + ess_power:.1f} MW plus unbounded grid import."
+            )
+
+        if peak_net_demand > available_supply + 1e-6:
+            return (
+                f"Peak net demand {peak_net_demand:.1f} MW exceeds available supply "
+                f"{available_supply:.1f} MW (generators {gen_capacity:.1f} + "
+                f"ESS {ess_power:.1f} + grid cap {grid_capacity:.1f}); relax grid import limit."
+            )
+
+        return (
+            f"Peak net demand {peak_net_demand:.1f} MW is within static available supply "
+            f"{available_supply:.1f} MW; infeasibility may involve ramping, SOC, or other constraints."
+        )

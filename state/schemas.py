@@ -36,12 +36,15 @@ class EDParams:
     time_steps: int
     demand_profile: List[float]
     generators: Dict[str, GeneratorSpec]
+    interval_minutes: int = 15
+    interval_hours: float = 0.25
     
     # Optional fields
     pv_profile: Optional[List[float]] = None
     ess: Optional[Dict[str, StorageSpec]] = None
     grid_price_profile: Optional[List[float]] = None
     timestamps: Optional[List[str]] = None
+    grid_import_limit_mw: Optional[float] = None
     
     # [핵심 수정] 여기에 base_rate를 추가해야 에러가 안 납니다!
     base_rate: float = 0.0 

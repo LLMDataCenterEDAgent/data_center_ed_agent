@@ -1,12 +1,13 @@
 import tempfile
 import os
 import re
+import json
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from openai import OpenAI
 
-from services.local_store import LocalStore
 from services.supabase_store import SupabaseStore
 from ui.reporting import create_pdf_report, plot_results, solution_rows, summary_metrics
 from workflow.graph import build_graph
@@ -349,7 +350,7 @@ def get_supabase_store():
     store = SupabaseStore(url=url, key=key)
     if store.enabled:
         return store, "supabase"
-    return LocalStore(), "local"
+    return store, "local"
 
 
 def configure_runtime_secrets():
@@ -378,59 +379,230 @@ def get_graph():
     return build_graph()
 
 
+def available_dispatch_steps(start_row, interval_minutes):
+    load_path = Path("datacenter_load/dc_profile_15min_ED.csv")
+    pv_path = Path("datacenter_load/pv_profile_15min_ED.csv")
+    try:
+        load_rows = pd.read_csv(load_path).dropna(how="all").shape[0]
+        pv_rows = pd.read_csv(pv_path).dropna(how="all").shape[0]
+        base_rows = max(1, min(load_rows, pv_rows) - int(start_row))
+    except Exception:
+        base_rows = 96
+    aggregation_factor = max(1, int(interval_minutes) // 15)
+    return max(1, base_rows // aggregation_factor)
+
+
+SCENARIO_DEFAULTS = {
+    "start_row": 0,
+    "interval_minutes": 15,
+    "time_steps": 96,
+    "gt_count": 2,
+    "gt_min": 85.0,
+    "gt_max": 170.0,
+    "gt_cost": 0.03,
+    "smr_min": 91.0,
+    "smr_max": 121.0,
+    "smr_cost": 0.002,
+    "ess_capacity_mwh": 160.0,
+    "ess_power_mw": 40.0,
+    "grid_import_limit_mw": 0.0,
+}
+
+
+def init_scenario_state():
+    for key, value in SCENARIO_DEFAULTS.items():
+        st.session_state.setdefault(f"scenario_{key}", value)
+
+
+def apply_scenario_draft(draft):
+    draft = sanitize_scenario_draft(draft)
+    for key in SCENARIO_DEFAULTS:
+        if key in draft and draft[key] is not None:
+            st.session_state[f"scenario_{key}"] = draft[key]
+
+
+def sanitize_scenario_draft(draft):
+    cleaned = {}
+    if not isinstance(draft, dict):
+        return cleaned
+
+    int_fields = {"start_row", "interval_minutes", "time_steps", "gt_count"}
+    float_fields = set(SCENARIO_DEFAULTS) - int_fields
+
+    for key, value in draft.items():
+        if key not in SCENARIO_DEFAULTS or value in ("", None):
+            continue
+        try:
+            if key in int_fields:
+                value = int(value)
+            elif key in float_fields:
+                value = float(value)
+        except (TypeError, ValueError):
+            continue
+
+        if key == "interval_minutes" and value not in (15, 30, 60):
+            continue
+        if key == "time_steps" and not (4 <= value <= 672):
+            continue
+        if key == "gt_count" and not (1 <= value <= 20):
+            continue
+        if key in {"gt_min", "gt_max", "smr_min", "smr_max"} and value < 10:
+            continue
+        if key in {"gt_cost", "smr_cost"} and value <= 0:
+            continue
+        if key in {"ess_capacity_mwh", "ess_power_mw"} and value <= 0:
+            continue
+        if key == "grid_import_limit_mw" and value < 0:
+            continue
+        cleaned[key] = value
+
+    return cleaned
+
+
+def draft_config_from_natural_language(text):
+    if not text.strip():
+        return {}
+
+    allowed_keys = list(SCENARIO_DEFAULTS.keys())
+    system_prompt = (
+        "Extract an energy dispatch scenario from the user's natural language. "
+        "Return only a JSON object using these keys when present: "
+        f"{', '.join(allowed_keys)}. "
+        "Use MW for power, MWh for energy, minutes for interval_minutes. "
+        "Only include values that are explicitly stated by the user. "
+        "For example, '2 gas turbines' means gt_count=2 only; it does not imply gt_min or gt_max. "
+        "Use 0 for grid_import_limit_mw only when the user explicitly says the grid is unlimited. "
+        "Do not invent values."
+    )
+    try:
+        client = OpenAI()
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+            temperature=0,
+        )
+        content = resp.choices[0].message.content or "{}"
+        match = re.search(r"\{.*\}", content, flags=re.DOTALL)
+        return sanitize_scenario_draft(json.loads(match.group(0) if match else content))
+    except Exception:
+        return sanitize_scenario_draft(draft_config_with_regex(text))
+
+
+def draft_config_with_regex(text):
+    draft = {}
+    lower = text.lower()
+
+    gt_match = re.search(r"(?:gt|gas turbine|가스터빈)\D{0,12}(\d+)\s*(?:대|unit|units)?", lower)
+    if gt_match:
+        draft["gt_count"] = int(gt_match.group(1))
+
+    ess_match = re.search(r"(\d+(?:\.\d+)?)\s*mwh\s*/\s*(\d+(?:\.\d+)?)\s*mw", lower)
+    if ess_match:
+        draft["ess_capacity_mwh"] = float(ess_match.group(1))
+        draft["ess_power_mw"] = float(ess_match.group(2))
+
+    grid_match = re.search(r"(?:grid|계통|수전).{0,20}?(\d+(?:\.\d+)?)\s*mw", lower)
+    if grid_match:
+        draft["grid_import_limit_mw"] = float(grid_match.group(1))
+
+    interval_match = re.search(r"(15|30|60)\s*(?:min|minute|분)", lower)
+    if interval_match:
+        draft["interval_minutes"] = int(interval_match.group(1))
+
+    return draft
+
+
 # ─────────────────────────────────────────
 #  Scenario form
 # ─────────────────────────────────────────
 
 def scenario_form():
+    init_scenario_state()
     st.markdown('<div class="section-card"><h2>🎛️ Scenario Configuration</h2>', unsafe_allow_html=True)
 
-    scenario_col1, scenario_col2, scenario_col3 = st.columns([2, 1, 1])
+    with st.expander("Natural-language scenario draft", expanded=False):
+        nl_prompt = st.text_area(
+            "Scenario request",
+            value="",
+            placeholder="예: GT 1대, SMR 91-121MW, ESS 160MWh/40MW, grid cap 30MW로 실행해줘.",
+            height=80,
+            key="scenario_nl_prompt",
+        )
+        if st.button("Draft settings from text", use_container_width=True):
+            draft = draft_config_from_natural_language(nl_prompt)
+            apply_scenario_draft(draft)
+            st.success("Scenario settings were drafted. Review the fields below before running.")
+
+    scenario_col1, scenario_col2, scenario_col3, scenario_col4 = st.columns([2, 1, 1, 1])
     with scenario_col1:
         name = st.text_input("Scenario name", value="Data center ED run")
     with scenario_col2:
-        start_row = st.number_input("Start row", min_value=0, max_value=100000, value=0, step=1)
+        start_row = st.number_input("Start row", min_value=0, max_value=100000, step=1, key="scenario_start_row")
     with scenario_col3:
-        time_steps = st.number_input("15-min steps", min_value=4, max_value=96, value=96, step=1)
+        interval_default = st.session_state.get("scenario_interval_minutes", 15)
+        interval_index = [15, 30, 60].index(interval_default) if interval_default in [15, 30, 60] else 0
+        interval_minutes = st.selectbox(
+            "Resolution",
+            options=[15, 30, 60],
+            index=interval_index,
+            format_func=lambda v: f"{v} min",
+            key="scenario_interval_minutes",
+        )
+    with scenario_col4:
+        default_steps = int(24 * 60 / interval_minutes)
+        max_steps = available_dispatch_steps(start_row, interval_minutes)
+        st.session_state["scenario_time_steps"] = min(int(st.session_state.get("scenario_time_steps", default_steps)), max_steps)
+        time_steps = st.number_input("Dispatch intervals", min_value=1, max_value=max_steps, step=1, key="scenario_time_steps")
 
     with st.expander("Scenario memo", expanded=False):
         description = st.text_area(
             "Description",
-            value="PV, SMR, GT, ESS를 활용해 15분 단위 데이터센터 경제급전을 수행한다.",
+            value="PV, SMR, GT, ESS를 활용해 선택한 시간 해상도로 데이터센터 경제급전을 수행한다.",
             height=80,
         )
 
     st.markdown("---")
     gen_col1, gen_col2, gen_col3, gen_col4 = st.columns(4)
     with gen_col1:
-        gt_count = st.number_input("GT count", min_value=1, max_value=20, value=2, step=1)
+        gt_count = st.number_input("GT count", min_value=1, max_value=20, step=1, key="scenario_gt_count")
     with gen_col2:
-        gt_min = st.number_input("GT min MW", min_value=0.0, value=85.0, step=5.0)
+        gt_min = st.number_input("GT min MW", min_value=0.0, step=5.0, key="scenario_gt_min")
     with gen_col3:
-        gt_max = st.number_input("GT max MW", min_value=0.0, value=170.0, step=5.0)
+        gt_max = st.number_input("GT max MW", min_value=0.0, step=5.0, key="scenario_gt_max")
     with gen_col4:
-        gt_cost = st.number_input("GT cost coeff", min_value=0.0, value=0.03, step=0.001, format="%.3f")
+        gt_cost = st.number_input("GT cost coeff", min_value=0.0, step=0.001, format="%.3f", key="scenario_gt_cost")
 
     smr_col1, smr_col2, smr_col3 = st.columns(3)
     with smr_col1:
-        smr_min = st.number_input("SMR min MW", min_value=0.0, value=91.0, step=1.0)
+        smr_min = st.number_input("SMR min MW", min_value=0.0, step=1.0, key="scenario_smr_min")
     with smr_col2:
-        smr_max = st.number_input("SMR max MW", min_value=0.0, value=121.0, step=1.0)
+        smr_max = st.number_input("SMR max MW", min_value=0.0, step=1.0, key="scenario_smr_max")
     with smr_col3:
-        smr_cost = st.number_input("SMR cost coeff", min_value=0.0, value=0.002, step=0.001, format="%.3f")
+        smr_cost = st.number_input("SMR cost coeff", min_value=0.0, step=0.001, format="%.3f", key="scenario_smr_cost")
 
     st.markdown("---")
-    storage_col1, storage_col2 = st.columns(2)
+    storage_col1, storage_col2, grid_col = st.columns(3)
     with storage_col1:
-        ess_capacity_mwh = st.number_input("ESS capacity MWh", min_value=0.0, value=160.0, step=10.0)
+        ess_capacity_mwh = st.number_input("ESS capacity MWh", min_value=0.0, step=10.0, key="scenario_ess_capacity_mwh")
     with storage_col2:
-        ess_power_mw = st.number_input("ESS max power MW", min_value=0.0, value=40.0, step=5.0)
+        ess_power_mw = st.number_input("ESS max power MW", min_value=0.0, step=5.0, key="scenario_ess_power_mw")
+    with grid_col:
+        grid_import_limit_mw = st.number_input(
+            "Grid import cap MW (0 = unbounded)",
+            min_value=0.0,
+            step=10.0,
+            key="scenario_grid_import_limit_mw",
+        )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
     config = {
         "start_row": int(start_row),
         "time_steps": int(time_steps),
+        "interval_minutes": int(interval_minutes),
         "gt_count": int(gt_count),
         "gt_min": gt_min,
         "gt_max": gt_max,
@@ -440,6 +612,7 @@ def scenario_form():
         "smr_cost": smr_cost,
         "ess_capacity_mwh": ess_capacity_mwh,
         "ess_power_mw": ess_power_mw,
+        "grid_import_limit_mw": None if grid_import_limit_mw == 0 else grid_import_limit_mw,
     }
     return name, description, config
 
@@ -449,12 +622,18 @@ def scenario_form():
 # ─────────────────────────────────────────
 
 def run_workflow(name, description, config, store):
+    if not store.enabled:
+        raise RuntimeError("Supabase secrets가 설정되지 않았습니다. 서버에서는 SUPABASE_URL과 SUPABASE_ANON_KEY 또는 SUPABASE_SERVICE_ROLE_KEY가 필요합니다.")
+
     scenario_row = None
-    if store.enabled:
-        scenario_row = store.insert_scenario(name=name, description=description, config=config)
+    scenario_row = store.insert_scenario(name=name, description=description, config=config)
+
+    # The Formulation Agent parses this natural-language request into parameters;
+    # when empty, it falls back to the structured form config.
+    nl_request = (st.session_state.get("scenario_nl_prompt") or "").strip()
 
     initial_state = {
-        "problem_text": description,
+        "problem_text": nl_request,
         "scenario_config": config,
         "solution_output": None,
         "explanation": None,
@@ -486,15 +665,14 @@ def run_workflow(name, description, config, store):
         pdf_bytes = pdf_path.read_bytes()
 
     run_row = None
-    if store.enabled:
-        scenario_id = scenario_row.get("id") if scenario_row else None
-        run_row = store.insert_run(
-            scenario_id=scenario_id,
-            status="success",
-            metrics=metrics,
-            result_table=rows,
-            report_text=result.get("explanation") or "",
-        )
+    scenario_id = scenario_row.get("id") if scenario_row else None
+    run_row = store.insert_run(
+        scenario_id=scenario_id,
+        status="success",
+        metrics=metrics,
+        result_table=rows,
+        report_text=result.get("explanation") or "",
+    )
 
     return {
         "scenario": scenario_row,
@@ -702,7 +880,7 @@ def _render_tou_table(rows):
 
 def render_history(store):
     if not store.enabled:
-        st.info("Supabase secrets가 설정되면 과거 실행 이력이 여기에 표시됩니다.")
+        st.error("Supabase secrets가 설정되지 않았습니다. 서버 Settings > Secrets에 SUPABASE_URL과 SUPABASE_ANON_KEY 또는 SUPABASE_SERVICE_ROLE_KEY를 추가하세요.")
         return
     try:
         runs = store.list_runs(limit=30)

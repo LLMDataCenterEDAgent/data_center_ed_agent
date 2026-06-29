@@ -402,7 +402,7 @@ SCENARIO_DEFAULTS = {
     "gt_cost": 0.03,
     "smr_min": 91.0,
     "smr_max": 121.0,
-    "smr_cost": 0.002,
+    "smr_cost": 2625.0,
     "ess_capacity_mwh": 160.0,
     "ess_power_mw": 40.0,
     "grid_import_limit_mw": 0.0,
@@ -610,7 +610,7 @@ def scenario_form():
     with smr_col2:
         smr_max = st.number_input("SMR max MW", min_value=0.0, step=1.0, key="scenario_smr_max")
     with smr_col3:
-        smr_cost = st.number_input("SMR cost coeff", min_value=0.0, step=0.001, format="%.3f", key="scenario_smr_cost")
+        smr_cost = st.number_input("SMR cost (KRW/MW per step)", min_value=0.0, step=25.0, format="%.0f", key="scenario_smr_cost")
 
     st.markdown("---")
     storage_col1, storage_col2, grid_col, tariff_col = st.columns(4)

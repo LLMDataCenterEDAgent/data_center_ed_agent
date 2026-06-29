@@ -406,12 +406,28 @@ SCENARIO_DEFAULTS = {
     "ess_capacity_mwh": 160.0,
     "ess_power_mw": 40.0,
     "grid_import_limit_mw": 0.0,
+    "tariff_season": "auto",
 }
 
 
 def init_scenario_state():
     for key, value in SCENARIO_DEFAULTS.items():
         st.session_state.setdefault(f"scenario_{key}", value)
+    st.session_state.setdefault("scenario_nl_prompt", "")
+
+    # Applied here (before any form widget is instantiated) so Streamlit allows
+    # writing to widget-keyed session state.
+    if st.session_state.pop("_reset_scenario", False):
+        for key, value in SCENARIO_DEFAULTS.items():
+            st.session_state[f"scenario_{key}"] = value
+        st.session_state["scenario_nl_prompt"] = ""
+
+    pending = st.session_state.pop("_pending_scenario", None)
+    if pending:
+        apply_scenario_draft(pending)
+
+    if st.session_state.pop("_clear_nl", False):
+        st.session_state["scenario_nl_prompt"] = ""
 
 
 def apply_scenario_draft(draft):
@@ -431,6 +447,13 @@ def sanitize_scenario_draft(draft):
 
     for key, value in draft.items():
         if key not in SCENARIO_DEFAULTS or value in ("", None):
+            continue
+        if key == "tariff_season":
+            season = str(value).strip().lower().replace(" ", "_")
+            season = {"spring": "spring_fall", "fall": "spring_fall",
+                      "autumn": "spring_fall"}.get(season, season)
+            if season in {"auto", "summer", "spring_fall", "winter"}:
+                cleaned[key] = season
             continue
         try:
             if key in int_fields:
@@ -531,10 +554,16 @@ def scenario_form():
             height=80,
             key="scenario_nl_prompt",
         )
-        if st.button("Draft settings from text", use_container_width=True):
-            draft = draft_config_from_natural_language(nl_prompt)
-            apply_scenario_draft(draft)
-            st.success("Scenario settings were drafted. Review the fields below before running.")
+        draft_col, reset_col = st.columns(2)
+        with draft_col:
+            if st.button("Draft settings from text", use_container_width=True):
+                draft = draft_config_from_natural_language(nl_prompt)
+                apply_scenario_draft(draft)
+                st.success("Scenario settings were drafted. Review the fields below before running.")
+        with reset_col:
+            if st.button("🔄 New scenario (reset to defaults)", use_container_width=True):
+                st.session_state["_reset_scenario"] = True
+                st.rerun()
 
     scenario_col1, scenario_col2, scenario_col3, scenario_col4 = st.columns([2, 1, 1, 1])
     with scenario_col1:
@@ -584,7 +613,7 @@ def scenario_form():
         smr_cost = st.number_input("SMR cost coeff", min_value=0.0, step=0.001, format="%.3f", key="scenario_smr_cost")
 
     st.markdown("---")
-    storage_col1, storage_col2, grid_col = st.columns(3)
+    storage_col1, storage_col2, grid_col, tariff_col = st.columns(4)
     with storage_col1:
         ess_capacity_mwh = st.number_input("ESS capacity MWh", min_value=0.0, step=10.0, key="scenario_ess_capacity_mwh")
     with storage_col2:
@@ -595,6 +624,19 @@ def scenario_form():
             min_value=0.0,
             step=10.0,
             key="scenario_grid_import_limit_mw",
+        )
+    with tariff_col:
+        tariff_options = ["auto", "summer", "spring_fall", "winter"]
+        tariff_default = st.session_state.get("scenario_tariff_season", "auto")
+        if tariff_default not in tariff_options:
+            tariff_default = "auto"
+        tariff_season = st.selectbox(
+            "TOU season",
+            options=tariff_options,
+            index=tariff_options.index(tariff_default),
+            format_func=lambda v: {"auto": "Auto (by date)", "summer": "Summer",
+                                   "spring_fall": "Spring/Fall", "winter": "Winter"}[v],
+            key="scenario_tariff_season",
         )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -613,6 +655,7 @@ def scenario_form():
         "ess_capacity_mwh": ess_capacity_mwh,
         "ess_power_mw": ess_power_mw,
         "grid_import_limit_mw": None if grid_import_limit_mw == 0 else grid_import_limit_mw,
+        "tariff_season": None if tariff_season == "auto" else tariff_season,
     }
     return name, description, config
 
@@ -673,6 +716,14 @@ def run_workflow(name, description, config, store):
         result_table=rows,
         report_text=result.get("explanation") or "",
     )
+
+    # Write the resolved scenario back to the form so the next request builds on
+    # it (e.g. "add one gas turbine" accumulates); the NL box is cleared so a
+    # relative command applies once. "New scenario" resets to defaults instead.
+    resolved_config = result.get("scenario_config")
+    if isinstance(resolved_config, dict):
+        st.session_state["_pending_scenario"] = resolved_config
+        st.session_state["_clear_nl"] = True
 
     return {
         "scenario": scenario_row,
@@ -942,6 +993,7 @@ def main():
             )
 
         if st.button("🚀 Run LangGraph Agent", type="primary", use_container_width=True):
+            ran_ok = False
             try:
                 with st.status("Running optimization workflow...", expanded=True) as status:
                     st.write("⏳ Saving scenario...")
@@ -949,7 +1001,7 @@ def main():
                     st.write("📊 Generating graph, report, and PDF...")
                     st.session_state["latest_result"] = run_workflow(name, description, config, store)
                     status.update(label="✅ Workflow completed", state="complete", expanded=False)
-                st.success("실행이 완료되었습니다.")
+                ran_ok = True
             except Exception as exc:
                 if store.enabled:
                     try:
@@ -957,6 +1009,10 @@ def main():
                     except Exception:
                         pass
                 st.error(f"실행 실패: {exc}")
+            # Rerun outside the try so the resolved scenario is written back to the
+            # form (applied in init_scenario_state before the widgets render).
+            if ran_ok:
+                st.rerun()
 
         if "latest_result" in st.session_state:
             render_result(st.session_state["latest_result"])

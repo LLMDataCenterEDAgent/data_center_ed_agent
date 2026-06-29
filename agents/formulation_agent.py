@@ -2,6 +2,7 @@
 
 import os
 import re
+import json
 import math
 
 import numpy as np
@@ -20,7 +21,17 @@ class FormulationAgent:
         "gt_count", "gt_min", "gt_max", "gt_cost",
         "smr_min", "smr_max", "smr_cost",
         "ess_capacity_mwh", "ess_power_mw", "grid_import_limit_mw",
+        "tariff_season",
         "interval_minutes", "time_steps", "start_row",
+    }
+
+    # TOU tariff season aliases -> canonical season understood by the price model.
+    _SEASON_ALIASES = {
+        "summer": "summer", "여름": "summer",
+        "winter": "winter", "겨울": "winter",
+        "spring": "spring_fall", "fall": "spring_fall", "autumn": "spring_fall",
+        "spring_fall": "spring_fall", "spring/fall": "spring_fall",
+        "봄": "spring_fall", "가을": "spring_fall",
     }
 
     # Keys for which a non-positive value is never meaningful and should be
@@ -58,15 +69,32 @@ class FormulationAgent:
             normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
         return normalized
 
-    def _extract_params_from_nl(self, problem_text):
+    def _normalize_season(self, value):
+        if value is None:
+            return None
+        key = str(value).strip().lower().replace(" ", "_")
+        return self._SEASON_ALIASES.get(key)
+
+    def _extract_params_from_nl(self, problem_text, current_config=None):
         """(i) Syntactic-repair + LLM parse of the operator's request.
 
-        Returns a dict of explicitly-stated scenario parameters, or {} when no
+        The current scenario is supplied to the LLM as JSON context so that
+        relative requests (e.g. "add one gas turbine") resolve against it.
+        Returns a dict of changed scenario parameters, or {} when no
         natural-language request is present or the LLM call fails.
         """
         text = self._normalize_synonyms(problem_text or "")
         if not text.strip():
             return {}
+        context = {
+            k: current_config.get(k)
+            for k in self._ALLOWED_KEYS
+            if current_config and current_config.get(k) is not None
+        }
+        user_msg = (
+            f"Current scenario (JSON):\n{json.dumps(context)}\n\n"
+            f"User request:\n{text}"
+        )
         try:
             from openai import OpenAI
 
@@ -76,7 +104,7 @@ class FormulationAgent:
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": SCENARIO_PARSER_SYSTEM_PROMPT},
-                    {"role": "user", "content": text},
+                    {"role": "user", "content": user_msg},
                 ],
                 temperature=0,
             )
@@ -87,6 +115,11 @@ class FormulationAgent:
             result = {}
             for key, value in parsed.items():
                 if key not in self._ALLOWED_KEYS or value is None:
+                    continue
+                if key == "tariff_season":
+                    season = self._normalize_season(value)
+                    if season:
+                        result[key] = season
                     continue
                 # Drop non-positive values the LLM sometimes invents for
                 # unspecified ranges, so they fall back to form/defaults
@@ -116,7 +149,7 @@ class FormulationAgent:
         # Parse the operator's natural-language request into parameters on the
         # first pass only; self-correction retries reuse the merged config.
         if not previous_solver_error:
-            nl_params = self._extract_params_from_nl(state.get("problem_text"))
+            nl_params = self._extract_params_from_nl(state.get("problem_text"), raw_config)
             if nl_params:
                 print(f">>> NL-extracted scenario params (override form/defaults): {nl_params}")
                 raw_config.update(nl_params)
@@ -190,7 +223,10 @@ class FormulationAgent:
             )
         }
 
-        grid_price_profile = self._build_grid_price_profile(timestamps, T, interval_hours)
+        grid_price_profile = self._build_grid_price_profile(
+            timestamps, T, interval_hours,
+            season_override=scenario_config.get("tariff_season"),
+        )
         fixed_base_cost = 107866666.0
 
         params = EDParams(
@@ -341,7 +377,7 @@ class FormulationAgent:
             print(f"GT fuel cost curve skipped: {exc}")
             return gt_coeffs
 
-    def _build_grid_price_profile(self, timestamps, time_steps, interval_hours=0.25):
+    def _build_grid_price_profile(self, timestamps, time_steps, interval_hours=0.25, season_override=None):
         current_month = 4
         if timestamps:
             try:
@@ -356,8 +392,17 @@ class FormulationAgent:
         summer = {"light": 120000.0, "mid": 190000.0, "peak": 350000.0}
         spring = {"light": 120000.0, "mid": 140000.0, "peak": 280000.0}
         winter = {"light": 125000.0, "mid": 180000.0, "peak": 320000.0}
+        season_modes = {
+            "summer": ("SUMMER", summer),
+            "winter": ("WINTER", winter),
+            "spring_fall": ("SPRING_FALL", spring),
+        }
 
-        if current_month in [6, 7, 8]:
+        # An explicit tariff_season (from the request) overrides the date-based season.
+        season = self._normalize_season(season_override)
+        if season in season_modes:
+            mode, rates_mwh = season_modes[season]
+        elif current_month in [6, 7, 8]:
             mode, rates_mwh = "SUMMER", summer
         elif current_month in [11, 12, 1, 2]:
             mode, rates_mwh = "WINTER", winter

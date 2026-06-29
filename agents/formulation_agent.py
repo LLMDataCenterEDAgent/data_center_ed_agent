@@ -350,7 +350,6 @@ class FormulationAgent:
     def _load_gt_cost_curve(self, default_linear_cost, interval_hours=0.25):
         gt_coeffs = {"a": 0.0, "b": default_linear_cost, "c": 0.0}
         target_file = "gtfuel.csv"
-        exchange_rate = 1500.0
 
         if not os.path.exists(target_file):
             return gt_coeffs
@@ -359,18 +358,25 @@ class FormulationAgent:
             df = pd.read_csv(target_file)
             df.columns = [c.lower().strip().replace(" ", "_") for c in df.columns]
             power_col = next((c for c in df.columns if "power" in c and "mw" in c), None)
-            cost_col = next((c for c in df.columns if "cost" in c and "sec" in c), None)
-            if not power_col or not cost_col:
+            fuel_col = next((c for c in df.columns if "fuel" in c and "kg" in c), None)
+            won_col = next((c for c in df.columns if "won" in c and "kg" in c), None)
+            if not power_col or not fuel_col or not won_col:
                 return gt_coeffs
 
             x_power = pd.to_numeric(df[power_col], errors="coerce")
-            y_cost_sec = pd.to_numeric(df[cost_col], errors="coerce")
-            valid_mask = x_power.notnull() & y_cost_sec.notnull()
+            fuel_kg_per_sec = pd.to_numeric(df[fuel_col], errors="coerce")
+            price_won_per_kg = pd.to_numeric(df[won_col], errors="coerce")
+            valid_mask = x_power.notnull() & fuel_kg_per_sec.notnull() & price_won_per_kg.notnull()
             if not valid_mask.any():
                 return gt_coeffs
 
             interval_seconds = interval_hours * 3600.0
-            y_cost_krw_interval = y_cost_sec[valid_mask] * exchange_rate * interval_seconds
+            # Fuel price is already in KRW/kg and the model is KRW-based, so the
+            # cost is computed directly without any USD round-trip / exchange rate
+            # (avoids double-converting the USD column, which baked in 1450 KRW/USD).
+            y_cost_krw_interval = (
+                fuel_kg_per_sec[valid_mask] * price_won_per_kg[valid_mask] * interval_seconds
+            )
             coeffs = np.polyfit(x_power[valid_mask], y_cost_krw_interval, 2)
             return {"a": float(coeffs[0]), "b": float(coeffs[1]), "c": float(coeffs[2])}
         except Exception as exc:

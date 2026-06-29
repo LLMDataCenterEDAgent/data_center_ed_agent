@@ -722,6 +722,11 @@ def run_workflow(name, description, config, store):
     # relative command applies once. "New scenario" resets to defaults instead.
     resolved_config = result.get("scenario_config")
     if isinstance(resolved_config, dict):
+        resolved_config = dict(resolved_config)
+        # Form convention: 0 = unbounded. Map an unbounded grid (None), e.g. after
+        # self-correction relaxed it, back to 0 so the form reflects what was used.
+        if resolved_config.get("grid_import_limit_mw") is None:
+            resolved_config["grid_import_limit_mw"] = 0
         st.session_state["_pending_scenario"] = resolved_config
         st.session_state["_clear_nl"] = True
 

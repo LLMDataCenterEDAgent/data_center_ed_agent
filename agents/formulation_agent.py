@@ -350,7 +350,7 @@ class FormulationAgent:
     def _load_gt_cost_curve(self, default_linear_cost, interval_hours=0.25):
         gt_coeffs = {"a": 0.0, "b": default_linear_cost, "c": 0.0}
         target_file = "gtfuel.csv"
-        exchange_rate = 1300.0
+        exchange_rate = 1500.0
 
         if not os.path.exists(target_file):
             return gt_coeffs

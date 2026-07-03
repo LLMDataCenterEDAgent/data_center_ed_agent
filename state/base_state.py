@@ -26,6 +26,7 @@ class AgentState(TypedDict, total=False):
     # Validation / self-correction loop
     solver_error: Optional[str]
     solver_diagnostic: Optional[str]
+    capacity_diagnosis: Optional[dict]
     validation_errors: Optional[list]
     correction_attempts: int
     max_correction_attempts: int
